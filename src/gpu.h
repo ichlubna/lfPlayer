@@ -7,9 +7,11 @@ class Gpu
 {
 	public:
 		virtual void render() = 0;
-		Gpu(Window *w, int, int) : windowPtr{w} {};
+		Gpu(Window *w, int tw, int th) : windowPtr{w}, textureWidth{tw}, textureHeight{th} {};
 	protected:
 		Window *windowPtr;
+        int textureWidth;
+        int textureHeight;
 };
 
 #endif

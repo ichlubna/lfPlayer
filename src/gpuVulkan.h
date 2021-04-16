@@ -22,8 +22,9 @@ class GpuVulkan : public Gpu
                 vk::UniqueSemaphore renderReady;
             } semaphores;
             vk::UniqueFence fence;
-        };  
-  
+        };   
+        std::vector<PipelineSync> pipelineSync;
+
         struct Buffer
         {
             vk::UniqueBuffer buffer;
@@ -53,6 +54,7 @@ class GpuVulkan : public Gpu
             Buffer uniformVpMatrix;
             vk::UniqueDescriptorSet descriptorSet;
         };
+        std::vector<std::unique_ptr<SwapChainFrame>> frames;
         
         struct Textures
         {
@@ -62,10 +64,18 @@ class GpuVulkan : public Gpu
             unsigned int top{0}; 
             Texture images[MAX_COUNT];
         };
+        Textures textures;
+        Texture depthImage;
  
         const int CONCURRENT_FRAMES_COUNT = 2;
         unsigned int processedFrame{0};
+      
+        std::string vertexShaderPath{"../precompiled/vertex.spv"};
+        std::string fragmentShaderPath{"../precompiled/fragment.spv"};
+        std::vector<std::string> computeShaderPaths{"../precompiled/computeFocusMap.spv"};
        
+        vk::SpecializationInfo specializationInfo;
+
         vk::UniqueSampler sampler;
 
 	    vk::UniqueInstance instance;
@@ -76,17 +86,27 @@ class GpuVulkan : public Gpu
         vk::Format swapChainImgFormat;
 	    vk::Extent2D extent;
         vk::UniqueRenderPass renderPass;
-        vk::UniquePipelineLayout pipelineLayout;
+        vk::UniquePipelineLayout graphicsPipelineLayout;
         vk::UniquePipeline graphicsPipeline;
-        vk::UniqueCommandPool commandPool;
+        vk::UniqueCommandPool graphicsCommandPool;
+        vk::UniqueCommandPool computeCommandPool;
         vk::UniqueDescriptorSetLayout descriptorSetLayout;
         vk::UniqueDescriptorPool descriptorPool;
 
-        std::vector<std::unique_ptr<SwapChainFrame>> frames;
+        class ComputePipeline
+        {
+            public:
+            vk::UniquePipeline pipeline;
+            vk::UniquePipelineLayout pipelineLayout;
+            vk::UniqueCommandBuffer commandBuffer;
+            vk::UniqueDescriptorSet descriptorSet; 
+        };
+        std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
+        static constexpr int WG_SIZE{256};
+        static constexpr int WARP_SIZE{32};
+        static constexpr int WG_COUNT{WG_SIZE/WARP_SIZE};
+
 		std::vector<const char*> validationLayers;
-        std::vector<PipelineSync> pipelineSync;
-        Textures textures;
-        Texture depthImage;
 
 		struct
 		{
@@ -108,20 +128,24 @@ class GpuVulkan : public Gpu
             Buffer index;
         } buffers;
 
+        //TODO encapsulate to general, graphics, compute
         std::vector<char> loadShader(const char* path);
         vk::UniqueShaderModule createShaderModule(std::vector<char> source);
 		void createInstance();
 		void selectPhysicalDevice();
 		void createDevice();
+        void createSpecializationInfo();
 		void createSurface();
 		void createSwapChain();
         void recreateSwapChain();
 		void createSwapChainImageViews();
         void createRenderPass();
         void createGraphicsPipeline();
+        void createComputePipelines();
         void createFramebuffers();
-        void createCommandPool();
-        void createCommandBuffers();
+        void createCommandPools();
+        void createGraphicsCommandBuffers();
+        void createComputeCommandBuffers();
         vk::Format getSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features);
         vk::Format getDepthFormat();
         void createDepthImage();
@@ -139,7 +163,9 @@ class GpuVulkan : public Gpu
         void updateUniforms(unsigned int imageID);
         void createDescriptorSetLayout();
         void createDescriptorPool();
-        void createDescriptorSets();
+        void createGraphicsDescriptorSets();
+        void createComputeDescriptorSets();
+        void createDescriptorSets(vk::DescriptorSet descriptorSet);
 		bool isDeviceOK(const vk::PhysicalDevice &potDevice);
         uint32_t getMemoryType(uint32_t typeFlags, vk::MemoryPropertyFlags properties);
 

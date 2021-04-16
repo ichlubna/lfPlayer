@@ -339,13 +339,13 @@ void GpuVulkan::createDescriptorSetLayout()
     samplerLayoutBinding.setBinding(bindings.sampler)
         .setDescriptorType(vk::DescriptorType::eSampler)
         .setDescriptorCount(1)
-        .setStageFlags(vk::ShaderStageFlagBits::eFragment);
+        .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute);
 
     vk::DescriptorSetLayoutBinding textureLayoutBinding;
     textureLayoutBinding.setBinding(bindings.texture)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
         .setDescriptorCount(textures.MAX_COUNT)
-        .setStageFlags(vk::ShaderStageFlagBits::eFragment)
+        .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);
 
     std::vector<vk::DescriptorSetLayoutBinding> bindings{samplerLayoutBinding, textureLayoutBinding};
@@ -358,24 +358,81 @@ void GpuVulkan::createDescriptorSetLayout()
         throw std::runtime_error("Cannot create descriptor set layout.");
 }
 
-void GpuVulkan::createGraphicsPipeline()
+void GpuVulkan::createComputeCommandBuffers()
 {
-    //TODO split into smaller ones maybe?
-    auto vertexShader = loadShader("../precompiled/vertex.spv"); 
-    auto fragmentShader = loadShader("../precompiled/fragment.spv");
-    vk::UniqueShaderModule vertexModule = createShaderModule(vertexShader); 
-    vk::UniqueShaderModule fragmentModule = createShaderModule(fragmentShader); 
+    for(auto &pipeline : computePipelines)
+    {
+        vk::CommandBufferAllocateInfo allocInfo;
+        allocInfo   .setCommandPool(*computeCommandPool)
+                    .setLevel(vk::CommandBufferLevel::ePrimary)
+                    .setCommandBufferCount(1);
+        if(!(pipeline->commandBuffer = std::move(device->allocateCommandBuffersUnique(allocInfo).front())))
+            throw std::runtime_error("Failed to allocate compute command buffers.");
 
+        vk::CommandBufferBeginInfo bufferBeginInfo;
+        bufferBeginInfo .setFlags(vk::CommandBufferUsageFlagBits::eSimultaneousUse)
+            .setPInheritanceInfo({});
+
+        if(pipeline->commandBuffer->begin(&bufferBeginInfo) != vk::Result::eSuccess)
+            throw std::runtime_error("Compute command buffer recording couldn't begin.");
+        pipeline->commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(pipeline->pipeline));
+        pipeline->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(pipeline->pipelineLayout), 0, 1, &*pipeline->descriptorSet, 0, {});
+        pipeline->commandBuffer->dispatch(Gpu::textureWidth/WG_COUNT, Gpu::textureHeight/WG_COUNT,0);
+        pipeline->commandBuffer->end();
+    }
+}
+
+void GpuVulkan::createComputePipelines()
+{
+    vk::PipelineLayoutCreateInfo layoutCreateInfo;
+    layoutCreateInfo  .setLayoutCount(1)
+                      .setPSetLayouts(descriptorSetLayout);
+
+    for(auto const &shaderPath : computeShaderPaths )
+    {
+        auto computeShader = loadShader(shaderPath.c_str());
+        vk::UniqueShaderModule computeModule = createShaderModule(computeShader); 
+        vk::PipelineShaderStageCreateInfo stageCreateInfo;
+        stageCreateInfo .setStage(vk::ShaderStageFlagBits::eCompute)
+                        .setModule(*computeModule)
+                        .setPName("main")
+                        .setPSpecializationInfo(&specializationInfo); 
+        
+        computePipelines.emplace_back(); 
+        if(!(computePipelines.back()->pipelineLayout = device->createPipelineLayoutUnique(layoutCreateInfo)))
+            throw std::runtime_error("Cannot create compute pipeline layout.");
+
+        vk::ComputePipelineCreateInfo pipelineCreateInfo;
+        pipelineCreateInfo  .setLayout(*(computePipelines.back()->pipelineLayout))
+                            .setStage(stageCreateInfo);
+        
+        vk::ResultValue<vk::UniquePipeline> resultValue = device->createComputePipelineUnique({}, pipelineCreateInfo);
+        if(resultValue.result != vk::Result::eSuccess)
+            throw std::runtime_error("Cannot create compute pipeline.");
+        computePipelines.back()->pipeline = std::move(resultValue.value);
+   }
+}
+
+void GpuVulkan::createSpecializationInfo()
+{
     vk::SpecializationMapEntry entry;
     entry   .setConstantID(0)
         .setOffset(0)
         .setSize(sizeof(int32_t));
-    vk::SpecializationInfo specInfo;
     int specConst = textures.MAX_COUNT;
-    specInfo.setMapEntryCount(1)
+    specializationInfo.setMapEntryCount(1)
         .setPMapEntries(&entry) 
         .setDataSize(sizeof(uint32_t))
         .setPData(&specConst);
+}
+
+void GpuVulkan::createGraphicsPipeline()
+{
+    //TODO split into smaller ones maybe?
+    auto vertexShader = loadShader(vertexShaderPath.c_str()); 
+    auto fragmentShader = loadShader(fragmentShaderPath.c_str());
+    vk::UniqueShaderModule vertexModule = createShaderModule(vertexShader); 
+    vk::UniqueShaderModule fragmentModule = createShaderModule(fragmentShader); 
 
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStages(2);
     shaderStages.at(0)  .setStage(vk::ShaderStageFlagBits::eVertex)
@@ -385,7 +442,7 @@ void GpuVulkan::createGraphicsPipeline()
     shaderStages.at(1)  .setStage(vk::ShaderStageFlagBits::eFragment)
         .setModule(*fragmentModule)
         .setPName("main")
-        .setPSpecializationInfo(&specInfo);
+        .setPSpecializationInfo(&specializationInfo);
 
     vk::PipelineVertexInputStateCreateInfo vertexInputInfo;
     vertexInputInfo .setVertexBindingDescriptionCount(0)
@@ -458,7 +515,7 @@ void GpuVulkan::createGraphicsPipeline()
         .setPushConstantRangeCount(0)
         .setPPushConstantRanges({});
 
-    if(!(pipelineLayout = device->createPipelineLayoutUnique(layoutInfo)))
+    if(!(graphicsPipelineLayout = device->createPipelineLayoutUnique(layoutInfo)))
         throw std::runtime_error("Cannot create pipeline layout.");
 
     vk::PipelineDepthStencilStateCreateInfo depthStencil;
@@ -483,12 +540,11 @@ void GpuVulkan::createGraphicsPipeline()
         .setPDepthStencilState(&depthStencil)
         .setPColorBlendState(&blendStateInfo)
         .setPDynamicState({})
-        .setLayout(*pipelineLayout)
+        .setLayout(*graphicsPipelineLayout)
         .setRenderPass(*renderPass)
         .setSubpass(0)
         .setBasePipelineHandle({})
         .setBasePipelineIndex(-1);
-
         vk::ResultValue<vk::UniquePipeline> resultValue = device->createGraphicsPipelineUnique({}, createInfo);
         if(resultValue.result != vk::Result::eSuccess)
             throw std::runtime_error("Cannot create graphics pipeline.");
@@ -514,21 +570,25 @@ void GpuVulkan::createFramebuffers()
     }
 }
 
-void GpuVulkan::createCommandPool()
+void GpuVulkan::createCommandPools()
 {
-    vk::CommandPoolCreateInfo createInfo;
-    createInfo  .setQueueFamilyIndex(queueFamilyIDs.graphics);
-
-    if(!(commandPool = device->createCommandPoolUnique(createInfo)))
-        throw std::runtime_error("Cannot create command pool.");
+    vk::CommandPoolCreateInfo graphicsCreateInfo;
+    graphicsCreateInfo  .setQueueFamilyIndex(queueFamilyIDs.graphics);
+    if(!(graphicsCommandPool = device->createCommandPoolUnique(graphicsCreateInfo)))
+        throw std::runtime_error("Cannot create graphics command pool.");
+    
+    vk::CommandPoolCreateInfo computeCreateInfo;
+    computeCreateInfo  .setQueueFamilyIndex(queueFamilyIDs.graphics);
+    if(!(computeCommandPool = device->createCommandPoolUnique(computeCreateInfo)))
+        throw std::runtime_error("Cannot create compute command pool.");
 }
 
-void GpuVulkan::createCommandBuffers()
+void GpuVulkan::createGraphicsCommandBuffers()
 {
     for(auto &frame : frames)
     {
         vk::CommandBufferAllocateInfo allocInfo;
-        allocInfo   .setCommandPool(*commandPool)
+        allocInfo   .setCommandPool(*graphicsCommandPool)
             .setLevel(vk::CommandBufferLevel::ePrimary)
             .setCommandBufferCount(1);
         if(!(frame->commandBuffer = std::move(device->allocateCommandBuffersUnique(allocInfo).front())))
@@ -550,7 +610,7 @@ void GpuVulkan::createCommandBuffers()
 
         frame->commandBuffer->beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
         frame->commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
-        frame->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout, 0, 1, &*frame->descriptorSet, 0, {});
+        frame->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipelineLayout, 0, 1, &*frame->descriptorSet, 0, {});
         frame->commandBuffer->draw(3, 1, 0, 0);
         frame->commandBuffer->endRenderPass();
 
@@ -609,50 +669,64 @@ void GpuVulkan::createDescriptorPool()
         throw std::runtime_error("Cannot create a descriptor pool.");
 }
 
-void GpuVulkan::createDescriptorSets()
-{
+void GpuVulkan::createComputeDescriptorSets()
+{ 
+    for(auto &pipeline : computePipelines)
+    {
+        vk::DescriptorSetAllocateInfo allocInfo;
+        allocInfo   .setDescriptorPool(*descriptorPool)
+            .setDescriptorSetCount(1)
+            .setPSetLayouts(&*descriptorSetLayout);
+        createDescriptorSets(*(pipeline->descriptorSet));
+    }
+}
+
+//TODO change to one final image which will be read in graphics and write in compute
+void GpuVulkan::createGraphicsDescriptorSets()
+{ 
     for(auto &frame : frames)
     {
         vk::DescriptorSetAllocateInfo allocInfo;
         allocInfo   .setDescriptorPool(*descriptorPool)
             .setDescriptorSetCount(1)
             .setPSetLayouts(&*descriptorSetLayout);
-
-        frame->descriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front());
-
-        std::vector<vk::DescriptorImageInfo> imageInfos;
-        //for(const auto &texture : textures)
-        for(int i=0; i<textures.MAX_COUNT; i++)
-        {
-            vk::DescriptorImageInfo imageInfo;
-            imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                .setImageView(*textures.images[i].imageView)
-                .setSampler({});
-            imageInfos.push_back(imageInfo);
-        }
-
-
-        vk::WriteDescriptorSet textureWriteSet;
-        textureWriteSet.setDstSet(*frame->descriptorSet)
-            .setDstBinding(bindings.texture)
-            .setDstArrayElement(0)
-            .setDescriptorType(vk::DescriptorType::eSampledImage)
-            .setDescriptorCount(textures.MAX_COUNT)
-            .setPImageInfo(imageInfos.data());
-
-        vk::WriteDescriptorSet samplerWriteSet;
-        vk::DescriptorImageInfo samplerInfo;
-        samplerInfo.setSampler(*sampler);
-        samplerWriteSet.setDstSet(*frame->descriptorSet)
-            .setDstBinding(bindings.sampler)
-            .setDstArrayElement(0)
-            .setDescriptorType(vk::DescriptorType::eSampler)
-            .setDescriptorCount(1)
-            .setPImageInfo(&samplerInfo);
-
-        std::vector<vk::WriteDescriptorSet> writeSets{textureWriteSet, samplerWriteSet};
-        device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, {});     
+        createDescriptorSets(*(frame->descriptorSet));
     }
+}
+
+void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet)
+{
+    std::vector<vk::DescriptorImageInfo> imageInfos;
+    for(int i=0; i<textures.MAX_COUNT; i++)
+    {
+        vk::DescriptorImageInfo imageInfo;
+        imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+            .setImageView(*textures.images[i].imageView)
+            .setSampler({});
+        imageInfos.push_back(imageInfo);
+    }
+
+
+    vk::WriteDescriptorSet textureWriteSet;
+    textureWriteSet.setDstSet(descriptorSet)
+        .setDstBinding(bindings.texture)
+        .setDstArrayElement(0)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setDescriptorCount(textures.MAX_COUNT)
+        .setPImageInfo(imageInfos.data());
+
+    vk::WriteDescriptorSet samplerWriteSet;
+    vk::DescriptorImageInfo samplerInfo;
+    samplerInfo.setSampler(*sampler);
+    samplerWriteSet.setDstSet(descriptorSet)
+        .setDstBinding(bindings.sampler)
+        .setDstArrayElement(0)
+        .setDescriptorType(vk::DescriptorType::eSampler)
+        .setDescriptorCount(1)
+        .setPImageInfo(&samplerInfo);
+
+    std::vector<vk::WriteDescriptorSet> writeSets{textureWriteSet, samplerWriteSet};
+    device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, {});     
 }
 
 vk::Format GpuVulkan::getSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) {
@@ -689,7 +763,7 @@ vk::UniqueCommandBuffer GpuVulkan::oneTimeCommandsStart()
 {
     vk::CommandBufferAllocateInfo allocInfo;
     allocInfo   .setLevel(vk::CommandBufferLevel::ePrimary)
-        .setCommandPool(*commandPool)
+        .setCommandPool(*graphicsCommandPool)
         .setCommandBufferCount(1);
 
     vk::UniqueCommandBuffer commandBuffer = std::move(device->allocateCommandBuffersUnique(allocInfo).front());
@@ -965,7 +1039,7 @@ void GpuVulkan::recreateSwapChain()
 
     frames.clear();
     graphicsPipeline.reset();
-    pipelineLayout.reset();
+    graphicsPipelineLayout.reset();
     renderPass.reset();
     swapChain.reset();
 
@@ -975,7 +1049,7 @@ void GpuVulkan::recreateSwapChain()
     createGraphicsPipeline();
     createDepthImage();
     createFramebuffers();
-    createCommandBuffers();
+    createGraphicsCommandBuffers();
 }
 
 GpuVulkan::GpuVulkan(Window* w, int textWidth, int textHeight) : Gpu(w, textWidth, textHeight)
@@ -985,6 +1059,7 @@ GpuVulkan::GpuVulkan(Window* w, int textWidth, int textHeight) : Gpu(w, textWidt
     createInstance();
     selectPhysicalDevice();
     createDevice();
+    createSpecializationInfo();
     createSurface();
     createSwapChain();
     createSwapChainImageViews();
@@ -992,14 +1067,17 @@ GpuVulkan::GpuVulkan(Window* w, int textWidth, int textHeight) : Gpu(w, textWidt
     allocateTextures();
     createDescriptorSetLayout();
     createGraphicsPipeline();
-    createCommandPool();
+    createCommandPools();
     createDepthImage();
     createFramebuffers();
     createDescriptorPool();
-    createDescriptorSets();
-    createCommandBuffers();
+    createGraphicsDescriptorSets();
+    createGraphicsCommandBuffers();
     createPipelineSync();
     setTexturesLayouts();
+    createComputePipelines();
+    createComputeCommandBuffers();
+    createComputeDescriptorSets();
 }
 
 GpuVulkan::~GpuVulkan()
