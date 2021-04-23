@@ -56,7 +56,6 @@ void Simulation::processInputs()
     if(inputs.close)
         end = true;
 }
-
 void Simulation::run() 
 {
     while(!end)

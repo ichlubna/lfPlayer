@@ -12,6 +12,7 @@ class GpuVulkan : public Gpu
         {
             unsigned int texture{0};
             unsigned int sampler{1};
+            unsigned int uniforms{2};
         } bindings;
 
         struct PipelineSync
@@ -56,13 +57,13 @@ class GpuVulkan : public Gpu
         };
         std::vector<std::unique_ptr<SwapChainFrame>> frames;
         
-        struct Textures
+        class Textures
         {
+            public:
+            const int maxCount{2};
             int width{1920};
             int height{1080};
-            static constexpr int MAX_COUNT{2};
-            unsigned int top{0}; 
-            Texture images[MAX_COUNT];
+            std::vector<Texture> images;
         };
         Textures textures;
         Texture depthImage;
@@ -74,6 +75,7 @@ class GpuVulkan : public Gpu
         std::string fragmentShaderPath{"../precompiled/fragment.spv"};
         std::vector<std::string> computeShaderPaths{"../precompiled/computeFocusMap.spv"};
        
+        std::vector<vk::SpecializationMapEntry> specializationEntries;
         vk::SpecializationInfo specializationInfo;
 
         vk::UniqueSampler sampler;
@@ -92,6 +94,7 @@ class GpuVulkan : public Gpu
         vk::UniqueCommandPool computeCommandPool;
         vk::UniqueDescriptorSetLayout descriptorSetLayout;
         vk::UniqueDescriptorPool descriptorPool;
+        vk::UniqueSemaphore computeGraphicsSemaphore;
 
         class ComputePipeline
         {
@@ -102,9 +105,12 @@ class GpuVulkan : public Gpu
             vk::UniqueDescriptorSet descriptorSet; 
         };
         std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
-        static constexpr int WG_SIZE{256};
         static constexpr int WARP_SIZE{32};
-        static constexpr int WG_COUNT{WG_SIZE/WARP_SIZE};
+        static constexpr int LOCAL_SIZE_X{WARP_SIZE/2};
+        static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
+        static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
+
+        std::vector<int> shaderConstants{textures.maxCount, LOCAL_SIZE_X, LOCAL_SIZE_Y};
 
 		std::vector<const char*> validationLayers;
 
@@ -163,9 +169,9 @@ class GpuVulkan : public Gpu
         void updateUniforms(unsigned int imageID);
         void createDescriptorSetLayout();
         void createDescriptorPool();
-        void createGraphicsDescriptorSets();
-        void createComputeDescriptorSets();
+        void allocateAndCreateDescriptorSets();
         void createDescriptorSets(vk::DescriptorSet descriptorSet);
+        void createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos);
 		bool isDeviceOK(const vk::PhysicalDevice &potDevice);
         uint32_t getMemoryType(uint32_t typeFlags, vk::MemoryPropertyFlags properties);
 

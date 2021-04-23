@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <stdexcept>
 #include <string.h>
 #include <iostream>
 #include <fstream>
@@ -343,12 +344,18 @@ void GpuVulkan::createDescriptorSetLayout()
 
     vk::DescriptorSetLayoutBinding textureLayoutBinding;
     textureLayoutBinding.setBinding(bindings.texture)
-        .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(textures.MAX_COUNT)
+        .setDescriptorType(vk::DescriptorType::eStorageImage)
+        .setDescriptorCount(textures.maxCount)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);
 
-    std::vector<vk::DescriptorSetLayoutBinding> bindings{samplerLayoutBinding, textureLayoutBinding};
+    vk::DescriptorSetLayoutBinding uboLayoutBinding;
+    uboLayoutBinding.setBinding(bindings.uniforms)
+                    .setDescriptorType(vk::DescriptorType::eUniformBuffer)
+                    .setDescriptorCount(1)
+                    .setStageFlags(vk::ShaderStageFlagBits::eCompute);
+
+    std::vector<vk::DescriptorSetLayoutBinding> bindings{samplerLayoutBinding, textureLayoutBinding, uboLayoutBinding};
 
     vk::DescriptorSetLayoutCreateInfo createInfo;
     createInfo  .setBindingCount(bindings.size())
@@ -377,7 +384,7 @@ void GpuVulkan::createComputeCommandBuffers()
             throw std::runtime_error("Compute command buffer recording couldn't begin.");
         pipeline->commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(pipeline->pipeline));
         pipeline->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(pipeline->pipelineLayout), 0, 1, &*pipeline->descriptorSet, 0, {});
-        pipeline->commandBuffer->dispatch(Gpu::textureWidth/WG_COUNT, Gpu::textureHeight/WG_COUNT,0);
+        pipeline->commandBuffer->dispatch(Gpu::textureWidth/LOCAL_SIZE_X, Gpu::textureHeight/LOCAL_SIZE_Y,1); 
         pipeline->commandBuffer->end();
     }
 }
@@ -385,11 +392,17 @@ void GpuVulkan::createComputeCommandBuffers()
 void GpuVulkan::createComputePipelines()
 {
     vk::PipelineLayoutCreateInfo layoutCreateInfo;
-    layoutCreateInfo  .setLayoutCount(1)
-                      .setPSetLayouts(descriptorSetLayout);
+    layoutCreateInfo  .setSetLayoutCount(1)
+                      .setPSetLayouts(&*descriptorSetLayout)
+                      .setPushConstantRangeCount(0)
+                      .setPPushConstantRanges({});
 
     for(auto const &shaderPath : computeShaderPaths )
-    {
+    { 
+        computePipelines.push_back(std::make_unique<ComputePipeline>()); 
+        if(!(computePipelines.back()->pipelineLayout = std::move(device->createPipelineLayoutUnique(layoutCreateInfo))))
+            throw std::runtime_error("Cannot create compute pipeline layout.");
+
         auto computeShader = loadShader(shaderPath.c_str());
         vk::UniqueShaderModule computeModule = createShaderModule(computeShader); 
         vk::PipelineShaderStageCreateInfo stageCreateInfo;
@@ -397,10 +410,6 @@ void GpuVulkan::createComputePipelines()
                         .setModule(*computeModule)
                         .setPName("main")
                         .setPSpecializationInfo(&specializationInfo); 
-        
-        computePipelines.emplace_back(); 
-        if(!(computePipelines.back()->pipelineLayout = device->createPipelineLayoutUnique(layoutCreateInfo)))
-            throw std::runtime_error("Cannot create compute pipeline layout.");
 
         vk::ComputePipelineCreateInfo pipelineCreateInfo;
         pipelineCreateInfo  .setLayout(*(computePipelines.back()->pipelineLayout))
@@ -411,19 +420,31 @@ void GpuVulkan::createComputePipelines()
             throw std::runtime_error("Cannot create compute pipeline.");
         computePipelines.back()->pipeline = std::move(resultValue.value);
    }
+
+    /*vk::SemaphoreTypeCreateInfo semTypeCreateInfo;
+    semTypeCreateInfo .setSemaphoreType(vk::SemaphoreType::eBinary)//eTimeline)
+                        .setInitialValue(0);*/
+    vk::SemaphoreCreateInfo semaphoreCreateInfo;
+    //semaphoreCreateInfo.setPNext(&semTypeCreateInfo);
+    if(!(computeGraphicsSemaphore = device->createSemaphoreUnique(semaphoreCreateInfo)))
+        throw std::runtime_error("Cannot create compute-graphcs semaphore.");
+    
 }
 
 void GpuVulkan::createSpecializationInfo()
 {
-    vk::SpecializationMapEntry entry;
-    entry   .setConstantID(0)
-        .setOffset(0)
-        .setSize(sizeof(int32_t));
-    int specConst = textures.MAX_COUNT;
-    specializationInfo.setMapEntryCount(1)
-        .setPMapEntries(&entry) 
-        .setDataSize(sizeof(uint32_t))
-        .setPData(&specConst);
+    for(size_t i=0; i<shaderConstants.size(); i++)
+    {
+        specializationEntries.emplace_back();
+        specializationEntries.back()   
+            .setConstantID(i)
+            .setOffset(i*sizeof(int))
+            .setSize(sizeof(int));
+    }
+    specializationInfo.setMapEntryCount(specializationEntries.size())
+        .setPMapEntries(specializationEntries.data()) 
+        .setDataSize(sizeof(int))
+        .setPData(shaderConstants.data());
 }
 
 void GpuVulkan::createGraphicsPipeline()
@@ -490,7 +511,8 @@ void GpuVulkan::createGraphicsPipeline()
         .setAlphaToOneEnable(false);
 
     vk::PipelineColorBlendAttachmentState colorBlendAttachement;
-    colorBlendAttachement   .setColorWriteMask( vk::ColorComponentFlagBits::eR |
+    colorBlendAttachement   .setColorWriteMask( 
+            vk::ColorComponentFlagBits::eR |
             vk::ColorComponentFlagBits::eG |
             vk::ColorComponentFlagBits::eB |
             vk::ColorComponentFlagBits::eA)
@@ -578,7 +600,7 @@ void GpuVulkan::createCommandPools()
         throw std::runtime_error("Cannot create graphics command pool.");
     
     vk::CommandPoolCreateInfo computeCreateInfo;
-    computeCreateInfo  .setQueueFamilyIndex(queueFamilyIDs.graphics);
+    computeCreateInfo  .setQueueFamilyIndex(queueFamilyIDs.compute);
     if(!(computeCommandPool = device->createCommandPoolUnique(computeCreateInfo)))
         throw std::runtime_error("Cannot create compute command pool.");
 }
@@ -649,70 +671,69 @@ uint32_t GpuVulkan::getMemoryType(uint32_t typeFlag, vk::MemoryPropertyFlags pro
 
 void GpuVulkan::createDescriptorPool()
 {
+    const int setsNumber = frames.size()+computeShaderPaths.size();
     vk::DescriptorPoolSize uboPoolSize;
-    uboPoolSize .setDescriptorCount(frames.size())
+    uboPoolSize .setDescriptorCount(setsNumber)
         .setType(vk::DescriptorType::eUniformBuffer);  
     vk::DescriptorPoolSize samplerPoolSize;
-    samplerPoolSize .setDescriptorCount(frames.size())
+    samplerPoolSize .setDescriptorCount(setsNumber)
         .setType(vk::DescriptorType::eSampler); 
     vk::DescriptorPoolSize imagePoolSize;
-    imagePoolSize   .setDescriptorCount(textures.MAX_COUNT*frames.size())
+    imagePoolSize   .setDescriptorCount(frames.size())
         .setType(vk::DescriptorType::eSampledImage); 
+    vk::DescriptorPoolSize imageStoragePoolSize;
+    imageStoragePoolSize   .setDescriptorCount(textures.maxCount*setsNumber)
+        .setType(vk::DescriptorType::eStorageImage); 
 
-    std::vector<vk::DescriptorPoolSize> sizes{uboPoolSize, samplerPoolSize, imagePoolSize};
+    std::vector<vk::DescriptorPoolSize> sizes{uboPoolSize, samplerPoolSize, imagePoolSize, imageStoragePoolSize};
 
     vk::DescriptorPoolCreateInfo createInfo;
     createInfo  .setPoolSizeCount(sizes.size())
-        .setMaxSets(frames.size())
+        .setMaxSets(setsNumber)
         .setPPoolSizes(sizes.data());
     if(!(descriptorPool = device->createDescriptorPoolUnique(createInfo)))
         throw std::runtime_error("Cannot create a descriptor pool.");
 }
 
-void GpuVulkan::createComputeDescriptorSets()
-{ 
-    for(auto &pipeline : computePipelines)
-    {
-        vk::DescriptorSetAllocateInfo allocInfo;
-        allocInfo   .setDescriptorPool(*descriptorPool)
-            .setDescriptorSetCount(1)
-            .setPSetLayouts(&*descriptorSetLayout);
-        createDescriptorSets(*(pipeline->descriptorSet));
-    }
-}
-
-//TODO change to one final image which will be read in graphics and write in compute
-void GpuVulkan::createGraphicsDescriptorSets()
-{ 
-    for(auto &frame : frames)
-    {
-        vk::DescriptorSetAllocateInfo allocInfo;
-        allocInfo   .setDescriptorPool(*descriptorPool)
-            .setDescriptorSetCount(1)
-            .setPSetLayouts(&*descriptorSetLayout);
-        createDescriptorSets(*(frame->descriptorSet));
-    }
-}
-
-void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet)
+void GpuVulkan::allocateAndCreateDescriptorSets()
 {
+    vk::DescriptorSetAllocateInfo allocInfo;
+    allocInfo   .setDescriptorPool(*descriptorPool)
+        .setDescriptorSetCount(1)
+        .setPSetLayouts(&*descriptorSetLayout);
+    
     std::vector<vk::DescriptorImageInfo> imageInfos;
-    for(int i=0; i<textures.MAX_COUNT; i++)
+    for(auto &texture : textures.images)
     {
         vk::DescriptorImageInfo imageInfo;
-        imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-            .setImageView(*textures.images[i].imageView)
+        imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
+            .setImageView(*texture.imageView)
             .setSampler({});
         imageInfos.push_back(imageInfo);
     }
+    
+    //TODO change to one final image which will be read in graphics and write in compute
+    for(auto &frame : frames)
+    {
+        frame->descriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front());
+        createDescriptorSets(*(frame->descriptorSet), imageInfos);
+    }
+    
+    for(auto &pipeline : computePipelines)
+    {
+        pipeline->descriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front());
+        createDescriptorSets(*(pipeline->descriptorSet), imageInfos);
+    }
+}
 
-
+void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos)
+{
     vk::WriteDescriptorSet textureWriteSet;
     textureWriteSet.setDstSet(descriptorSet)
         .setDstBinding(bindings.texture)
         .setDstArrayElement(0)
-        .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(textures.MAX_COUNT)
+        .setDescriptorType(vk::DescriptorType::eStorageImage)
+        .setDescriptorCount(textures.maxCount)
         .setPImageInfo(imageInfos.data());
 
     vk::WriteDescriptorSet samplerWriteSet;
@@ -804,6 +825,10 @@ void GpuVulkan::copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size, 
 GpuVulkan::Image GpuVulkan::createImage(unsigned int width, unsigned int height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties)
 {
     Image image;
+    
+    std::vector<uint32_t> familyIndices{static_cast<uint32_t>(queueFamilyIDs.graphics), static_cast<uint32_t>(queueFamilyIDs.compute)};
+    if(queueFamilyIDs.graphics != queueFamilyIDs.present)
+        familyIndices.push_back(static_cast<uint32_t>(queueFamilyIDs.present));
 
     vk::ImageCreateInfo createInfo;
     createInfo  .setImageType(vk::ImageType::e2D) 
@@ -816,7 +841,9 @@ GpuVulkan::Image GpuVulkan::createImage(unsigned int width, unsigned int height,
         .setTiling(tiling)
         .setInitialLayout(vk::ImageLayout::eUndefined)
         .setUsage(usage)
-        .setSharingMode(vk::SharingMode::eExclusive)
+        .setSharingMode(vk::SharingMode::eConcurrent)
+        .setQueueFamilyIndexCount(familyIndices.size())
+        .setPQueueFamilyIndices(familyIndices.data())
         .setSamples(vk::SampleCountFlagBits::e1)
         .setFlags(vk::ImageCreateFlagBits());
 
@@ -876,7 +903,6 @@ void GpuVulkan::transitionImageLayout(vk::Image image, vk::Format format, vk::Im
     }
     else
         range.setAspectMask(vk::ImageAspectFlagBits::eColor);
-
     vk::ImageMemoryBarrier barrier;
     barrier .setOldLayout(oldLayout)
         .setNewLayout(newLayout)
@@ -904,6 +930,13 @@ void GpuVulkan::transitionImageLayout(vk::Image image, vk::Format format, vk::Im
             .setDstAccessMask(vk::AccessFlagBits::eShaderRead);
         srcStageFlags = vk::PipelineStageFlagBits::eTransfer;
         dstStageFlags = vk::PipelineStageFlagBits::eFragmentShader;
+    }
+    else if (oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::eGeneral)
+    {
+        barrier .setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
+            .setDstAccessMask(vk::AccessFlagBits::eShaderWrite | vk::AccessFlagBits::eShaderRead);
+        srcStageFlags = vk::PipelineStageFlagBits::eTransfer;
+        dstStageFlags = vk::PipelineStageFlagBits::eFragmentShader | vk::PipelineStageFlagBits::eComputeShader;
     }
     else if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
     {
@@ -937,20 +970,23 @@ vk::UniqueImageView GpuVulkan::createImageView(vk::Image image, vk::Format forma
 
 void GpuVulkan::allocateTextures()
 {
-    for(int i=0; i<textures.MAX_COUNT; i++)
+    for(int i=0; i<textures.maxCount; i++)
     {
-        textures.images[i].image = createImage(textures.width, textures.height, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal);
-        textures.images[i].imageView = createImageView(*textures.images[i].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
+        vk::ImageUsageFlags usage{vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage};
+        textures.images.emplace_back();
+        textures.images.back().image = createImage(textures.width, textures.height, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, usage, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        textures.images.back().imageView = createImageView(*textures.images[i].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
     }
     sampler = createSampler();
 }
 
 void GpuVulkan::setTexturesLayouts()
 {   
-    for(int i=0; i<textures.MAX_COUNT; i++)
+    //for(int i=0; i<textures.MAX_COUNT; i++)
+    for(auto &texture : textures.images)
     {
-        transitionImageLayout(*textures.images[i].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-        transitionImageLayout(*textures.images[i].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+        transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+        transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral);//eShaderReadOnlyOptimal);
     }
 
 }
@@ -982,8 +1018,20 @@ vk::UniqueSampler GpuVulkan::createSampler()
 }
 
 void GpuVulkan::render()
-{
-    while (vk::Result::eTimeout == device->waitForFences(1, &*pipelineSync.at(processedFrame).fence, VK_TRUE, std::numeric_limits<uint64_t>::max()));
+{    //for(auto const &pipeline : computePipelines)
+    //{   
+    static int g = 0; 
+    std::cerr << g++ << std::endl;
+        vk::SubmitInfo computeSubmitInfo;
+        computeSubmitInfo 
+        .setCommandBufferCount(1)
+        .setPCommandBuffers(&*(computePipelines[0]->commandBuffer))
+        .setSignalSemaphoreCount(1)
+        .setPSignalSemaphores(&*computeGraphicsSemaphore);
+        if(queues.compute.submit(1, &computeSubmitInfo, nullptr) != vk::Result::eSuccess)
+            throw std::runtime_error("Cannot submit compute command buffer.");
+   // }
+    while (vk::Result::eTimeout == device->waitForFences(1, &*pipelineSync.at(processedFrame).fence, VK_TRUE, std::numeric_limits<uint64_t>::max())){};
 
     unsigned int imageID;
     if(device->acquireNextImageKHR(*swapChain, std::numeric_limits<uint64_t>::max(), *pipelineSync.at(processedFrame).semaphores.imgReady, {}, &imageID) == vk::Result::eErrorOutOfDateKHR)
@@ -992,11 +1040,13 @@ void GpuVulkan::render()
         return;
     }
 
-    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+    std::vector<vk::PipelineStageFlags> waitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
+    std::vector<vk::Semaphore> waitSemaphores{*pipelineSync.at(processedFrame).semaphores.imgReady, *computeGraphicsSemaphore}; 
+
     vk::SubmitInfo submitInfo;
-    submitInfo  .setWaitSemaphoreCount(1)
-        .setPWaitSemaphores(&*pipelineSync.at(processedFrame).semaphores.imgReady)
-        .setPWaitDstStageMask(waitStages)
+    submitInfo  .setWaitSemaphoreCount(waitSemaphores.size())
+        .setPWaitSemaphores(waitSemaphores.data())
+        .setPWaitDstStageMask(waitStages.data())
         .setCommandBufferCount(1)
         .setPCommandBuffers(&*frames[imageID]->commandBuffer)
         .setSignalSemaphoreCount(1)
@@ -1066,18 +1116,18 @@ GpuVulkan::GpuVulkan(Window* w, int textWidth, int textHeight) : Gpu(w, textWidt
     createRenderPass();
     allocateTextures();
     createDescriptorSetLayout();
+    createComputePipelines();
     createGraphicsPipeline();
     createCommandPools();
     createDepthImage();
     createFramebuffers();
     createDescriptorPool();
-    createGraphicsDescriptorSets();
+    allocateAndCreateDescriptorSets();
     createGraphicsCommandBuffers();
+    createComputeCommandBuffers();
     createPipelineSync();
     setTexturesLayouts();
-    createComputePipelines();
-    createComputeCommandBuffers();
-    createComputeDescriptorSets();
+
 }
 
 GpuVulkan::~GpuVulkan()
