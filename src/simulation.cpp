@@ -58,8 +58,11 @@ void Simulation::processInputs()
 }
 void Simulation::run() 
 {
+    Gpu::UniformPointers uniforms{gpu->getUniformPointers()};
     while(!end)
     {
+        *uniforms.focus += 0.01;
+
         auto startTime= std::chrono::high_resolution_clock::now();
         processInputs();
         gpu->render();

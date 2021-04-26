@@ -5,20 +5,24 @@ class GpuVulkan : public Gpu
 {
 	public:
 		void render() override;
+        UniformPointers getUniformPointers() override {return generalUniforms.getUniformPointers();};
 		GpuVulkan(Window* w, int textWidth=1920, int textHeight=1080);
 		~GpuVulkan();
 	private: 
-        const struct
+        const class
         {
+            public:
             unsigned int texture{0};
             unsigned int sampler{1};
             unsigned int uniforms{2};
         } bindings;
 
-        struct PipelineSync
+        class PipelineSync
         {
-            struct
+            public:
+            class
             {
+                public:
                 vk::UniqueSemaphore imgReady;
                 vk::UniqueSemaphore renderReady;
             } semaphores;
@@ -26,33 +30,36 @@ class GpuVulkan : public Gpu
         };   
         std::vector<PipelineSync> pipelineSync;
 
-        struct Buffer
+        class Buffer
         {
+            public:
             vk::UniqueBuffer buffer;
             vk::UniqueDeviceMemory memory;
-            unsigned int top{0};
         };
 
-        struct Image
+        class Image
         {
+            public:
             vk::UniqueImage textureImage;
             vk::UniqueDeviceMemory textureImageMemory;
             size_t memorySize{0};
         };
         
-        struct Texture
+        class Texture
         {
+            public:
             Image image;
             vk::UniqueImageView imageView;
         };
 
-        struct SwapChainFrame
+        class SwapChainFrame
         {
+            public:
             vk::Image image;
             vk::UniqueImageView imageView;
             vk::UniqueFramebuffer frameBuffer;
             vk::UniqueCommandBuffer commandBuffer;
-            Buffer uniformVpMatrix;
+            Buffer uniformBuffer;
             vk::UniqueDescriptorSet descriptorSet;
         };
         std::vector<std::unique_ptr<SwapChainFrame>> frames;
@@ -111,25 +118,50 @@ class GpuVulkan : public Gpu
         static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
 
         std::vector<int> shaderConstants{textures.maxCount, LOCAL_SIZE_X, LOCAL_SIZE_Y};
+       
+ 
+        class GeneralUniforms
+        {
+            public:
+            static constexpr size_t UNIFORM_SIZE{4};
+            static constexpr size_t FLOAT_COUNT{1};
+            static constexpr size_t INT_COUNT{1};
+            static constexpr size_t FLOAT_SIZE{FLOAT_COUNT*UNIFORM_SIZE};
+            static constexpr size_t INT_SIZE{INT_COUNT*UNIFORM_SIZE};
+            static constexpr size_t SIZE{(FLOAT_COUNT+INT_COUNT)*UNIFORM_SIZE};
+            std::array<float, 1> floats;
+            std::array<int32_t, 1> ints;
+            Buffer buffer;
+            UniformPointers getUniformPointers()
+            {
+                UniformPointers pts;
+                pts.focus = &floats[0];
+                return pts;
+            }
+           
+        } generalUniforms;
 
 		std::vector<const char*> validationLayers;
 
-		struct
+		class
 		{
+            public:
 			int graphics{-1};
 			int present{-1};
 			int compute{-1};
 		} queueFamilyIDs;
 
-        struct
+        class
         {
+            public:
             vk::Queue graphics;
     		vk::Queue compute;
     		vk::Queue present;
         } queues;
 
-        struct
+        class
         {
+            public:
             Buffer vertex;
             Buffer index;
         } buffers;
@@ -152,6 +184,8 @@ class GpuVulkan : public Gpu
         void createCommandPools();
         void createGraphicsCommandBuffers();
         void createComputeCommandBuffers();
+        GpuVulkan::Buffer createBuffer(size_t size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties);
+        void createBuffers();
         vk::Format getSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features);
         vk::Format getDepthFormat();
         void createDepthImage();
@@ -166,7 +200,7 @@ class GpuVulkan : public Gpu
         vk::UniqueSampler createSampler();
         void copyBuffer(vk::Buffer src, vk::Buffer dst, vk::DeviceSize size, vk::DeviceSize srcOffset, vk::DeviceSize dstOffset);
         void copyBufferToImage(vk::Buffer buffer, vk::Image image, unsigned int width, unsigned int height);
-        void updateUniforms(unsigned int imageID);
+        void updateUniforms();
         void createDescriptorSetLayout();
         void createDescriptorPool();
         void allocateAndCreateDescriptorSets();

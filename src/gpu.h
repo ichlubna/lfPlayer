@@ -6,7 +6,12 @@
 class Gpu
 {
 	public:
+        class UniformPointers
+        {   public:
+            float *focus{nullptr};
+        }; 
 		virtual void render() = 0;
+        virtual UniformPointers getUniformPointers() = 0;
 		Gpu(Window *w, int tw, int th) : windowPtr{w}, textureWidth{tw}, textureHeight{th} {};
 	protected:
 		Window *windowPtr;

@@ -1,15 +1,14 @@
 #version 450
-#extension GL_ARB_separate_shader_objects : enable
-layout(constant_id = 0) const int MAX_TEXTURES = 64;
-layout(constant_id = 1) const int LOCAL_SIZE_X = 16;
-layout(constant_id = 2) const int LOCAL_SIZE_Y = 16;
-layout(local_size_x_id = 1, local_size_y_id = 2) in;
-layout(set = 0, binding = 0, rgba8) uniform writeonly image2D textures[MAX_TEXTURES];
-layout(set = 0, binding = 1) uniform sampler textSampler;
+#include "computeHeader.glsl"
+
+float colorDistance(vec3 a, vec3 b)
+{
+    return max(max(abs(a.r-b.r), abs(a.g-b.g)), abs(a.b-b.b)); //Chebyshev
+}
 
 void main()
 {
     const ivec2 outCoords = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-    float test = (outCoords.x>960) ? 1.0 : 0.5;
+    float test = (outCoords.x>960+uniforms.focus) ? 1.0 : 0.5;
     imageStore(textures[0], outCoords, vec4(test,1.0,1.0,1.0));
 }
