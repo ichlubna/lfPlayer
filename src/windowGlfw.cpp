@@ -4,12 +4,12 @@
 #include <iterator>
 #include "windowGlfw.h"
 
-const Inputs& WindowGlfw::getInputs()
+Inputs* WindowGlfw::getInputs()
 {
 	glfwPollEvents();
 	inputs.close = glfwWindowShouldClose(window);
 	
-    return inputs;
+    return &inputs;
 }
 
 Window::WinSize WindowGlfw::getFramebufferSize() const
@@ -80,7 +80,11 @@ WindowGlfw::WindowGlfw(unsigned int w, unsigned int h) : Window{w,h}
 
 				case GLFW_KEY_D:
 					keyCode = Inputs::Key::D;
-				break;	
+				break;
+
+                case GLFW_KEY_Z:
+                    keyCode = Inputs::Key::Z;
+                break;	
 				
                 case GLFW_KEY_RIGHT_ALT:
                 case GLFW_KEY_LEFT_ALT:

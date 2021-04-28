@@ -5,16 +5,16 @@ class GpuVulkan : public Gpu
 {
 	public:
 		void render() override;
-        UniformPointers getUniformPointers() override {return generalUniforms.getUniformPointers();};
 		GpuVulkan(Window* w, int textWidth=1920, int textHeight=1080);
 		~GpuVulkan();
 	private: 
         const class
         {
             public:
-            unsigned int texture{0};
+            unsigned int uniforms{0};
             unsigned int sampler{1};
-            unsigned int uniforms{2};
+            unsigned int images{2};
+            unsigned int textures{3};
         } bindings;
 
         class PipelineSync
@@ -101,7 +101,6 @@ class GpuVulkan : public Gpu
         vk::UniqueCommandPool computeCommandPool;
         vk::UniqueDescriptorSetLayout descriptorSetLayout;
         vk::UniqueDescriptorPool descriptorPool;
-        vk::UniqueSemaphore computeGraphicsSemaphore;
 
         class ComputePipeline
         {
@@ -109,7 +108,10 @@ class GpuVulkan : public Gpu
             vk::UniquePipeline pipeline;
             vk::UniquePipelineLayout pipelineLayout;
             vk::UniqueCommandBuffer commandBuffer;
+            vk::SubmitInfo submitInfo;
             vk::UniqueDescriptorSet descriptorSet; 
+            vk::UniqueSemaphore finishedSemaphore;
+            std::vector<vk::Semaphore> waitSemaphores{}; 
         };
         std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
         static constexpr int WARP_SIZE{32};
@@ -117,29 +119,11 @@ class GpuVulkan : public Gpu
         static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
         static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
 
-        std::vector<int> shaderConstants{textures.maxCount, LOCAL_SIZE_X, LOCAL_SIZE_Y};
-       
+        std::vector<int32_t> shaderConstants{textures.maxCount, LOCAL_SIZE_X, LOCAL_SIZE_Y}; 
+        std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
+        std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
  
-        class GeneralUniforms
-        {
-            public:
-            static constexpr size_t UNIFORM_SIZE{4};
-            static constexpr size_t FLOAT_COUNT{1};
-            static constexpr size_t INT_COUNT{1};
-            static constexpr size_t FLOAT_SIZE{FLOAT_COUNT*UNIFORM_SIZE};
-            static constexpr size_t INT_SIZE{INT_COUNT*UNIFORM_SIZE};
-            static constexpr size_t SIZE{(FLOAT_COUNT+INT_COUNT)*UNIFORM_SIZE};
-            std::array<float, 1> floats;
-            std::array<int32_t, 1> ints;
-            Buffer buffer;
-            UniformPointers getUniformPointers()
-            {
-                UniformPointers pts;
-                pts.focus = &floats[0];
-                return pts;
-            }
-           
-        } generalUniforms;
+        Buffer uniformBuffer;
 
 		std::vector<const char*> validationLayers;
 

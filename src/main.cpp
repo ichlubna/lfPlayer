@@ -11,7 +11,12 @@ int main(int argc, char **argv)
     }
     else if (std::string(argv[1]) == "-h")
     {
-        std::cerr << "Usage: lfPlayer file.mkv" << std::endl;
+        std::cerr << "Usage:" << std::endl <<
+                 "lfPlayer file.mkv" << std::endl <<
+                 "- video with h265 stream" << std::endl <<
+                 "or" << std::endl <<
+                 "lfPlayer folderWithImages" << std::endl <<
+                 "- folder with lf grid images with row_column naming such as: 0_0.jpg, 0_1.jpg, ..." << std::endl;
         return EXIT_FAILURE;
     }
 

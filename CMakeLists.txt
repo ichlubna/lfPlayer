@@ -13,6 +13,7 @@ src/windowGlfw.cpp
 src/simulation.cpp
 src/camera.cpp
 src/inputs.cpp
+src/resources.cpp
 )
 
 find_package(Vulkan REQUIRED)
@@ -20,6 +21,7 @@ find_package(glfw3 REQUIRED)
 find_package(glm REQUIRED)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
+target_include_directories(${PROJECT_NAME} PUBLIC libs)
 
 add_custom_target(run 	COMMAND ${PROJECT_NAME}
 						DEPENDS ${PROJECT_NAME}

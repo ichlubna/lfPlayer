@@ -1,5 +1,6 @@
 #ifndef INPUTS_HDR
 #define INPUTS_HDR
+#include <map>
 class Inputs
 {
     public:
@@ -7,8 +8,9 @@ class Inputs
         {	ESC = 1,
             LMB = 2, RMB = 4, MMB = 8,
             W = 16, A = 32, S = 64, D = 128,
-            ALT = 256, ENTER = 512
+            ALT = 256, ENTER = 512, Z = 1024
         };
+        std::map<long, bool> released;
 
         struct mousePosition
         {
@@ -43,6 +45,23 @@ class Inputs
         long composeKeys(T t) const
         {
             return t;
+        }
+
+        template <typename... Args>
+        bool pressedAfterRelease(Args... args)
+        {
+            bool isPressed = pressed(args...);
+            long mask = composeKeys(args...);
+            bool wasReleased = released[mask];
+            if(isPressed)
+            {
+                released[mask] = false;
+                if(wasReleased)
+                    return true;
+            }
+            else
+                released[mask] = true;
+            return false;
         }
     private:
         //expecting max 32 keys, plus possible modifiers

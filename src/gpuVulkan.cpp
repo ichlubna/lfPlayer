@@ -139,6 +139,7 @@ void GpuVulkan::createDevice()
 
     std::vector<const char*> deviceExtensions;
     deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
     vk::DeviceCreateInfo createInfo;
     createInfo	.setPQueueCreateInfos(queueCreateInfos)
@@ -336,26 +337,33 @@ void GpuVulkan::createRenderPass()
 
 void GpuVulkan::createDescriptorSetLayout()
 {
+    vk::DescriptorSetLayoutBinding uboLayoutBinding;
+    uboLayoutBinding.setBinding(bindings.uniforms)
+                    .setDescriptorType(vk::DescriptorType::eUniformBuffer)
+                    .setDescriptorCount(1)
+                    .setStageFlags(vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eFragment);
+
     vk::DescriptorSetLayoutBinding samplerLayoutBinding;
     samplerLayoutBinding.setBinding(bindings.sampler)
         .setDescriptorType(vk::DescriptorType::eSampler)
         .setDescriptorCount(1)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute);
 
-    vk::DescriptorSetLayoutBinding textureLayoutBinding;
-    textureLayoutBinding.setBinding(bindings.texture)
+    vk::DescriptorSetLayoutBinding imageLayoutBinding;
+    imageLayoutBinding.setBinding(bindings.images)
         .setDescriptorType(vk::DescriptorType::eStorageImage)
         .setDescriptorCount(textures.maxCount)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);
 
-    vk::DescriptorSetLayoutBinding uboLayoutBinding;
-    uboLayoutBinding.setBinding(bindings.uniforms)
-                    .setDescriptorType(vk::DescriptorType::eUniformBuffer)
-                    .setDescriptorCount(1)
-                    .setStageFlags(vk::ShaderStageFlagBits::eCompute);
+    vk::DescriptorSetLayoutBinding textureLayoutBinding;
+    textureLayoutBinding.setBinding(bindings.textures)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setDescriptorCount(textures.maxCount)
+        .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
+        .setPImmutableSamplers(0);    
 
-    std::vector<vk::DescriptorSetLayoutBinding> bindings{samplerLayoutBinding, textureLayoutBinding, uboLayoutBinding};
+    std::vector<vk::DescriptorSetLayoutBinding> bindings{uboLayoutBinding, samplerLayoutBinding, imageLayoutBinding, textureLayoutBinding};
 
     vk::DescriptorSetLayoutCreateInfo createInfo;
     createInfo  .setBindingCount(bindings.size())
@@ -397,13 +405,13 @@ void GpuVulkan::createComputePipelines()
                       .setPushConstantRangeCount(0)
                       .setPPushConstantRanges({});
 
-    for(auto const &shaderPath : computeShaderPaths )
+    for(size_t i=0; i<computeShaderPaths.size(); i++)
     { 
         computePipelines.push_back(std::make_unique<ComputePipeline>()); 
         if(!(computePipelines.back()->pipelineLayout = std::move(device->createPipelineLayoutUnique(layoutCreateInfo))))
             throw std::runtime_error("Cannot create compute pipeline layout.");
 
-        auto computeShader = loadShader(shaderPath.c_str());
+        auto computeShader = loadShader(computeShaderPaths[i].c_str());
         vk::UniqueShaderModule computeModule = createShaderModule(computeShader); 
         vk::PipelineShaderStageCreateInfo stageCreateInfo;
         stageCreateInfo .setStage(vk::ShaderStageFlagBits::eCompute)
@@ -419,15 +427,27 @@ void GpuVulkan::createComputePipelines()
         if(resultValue.result != vk::Result::eSuccess)
             throw std::runtime_error("Cannot create compute pipeline.");
         computePipelines.back()->pipeline = std::move(resultValue.value);
-   }
 
-    /*vk::SemaphoreTypeCreateInfo semTypeCreateInfo;
-    semTypeCreateInfo .setSemaphoreType(vk::SemaphoreType::eBinary)//eTimeline)
-                        .setInitialValue(0);*/
-    vk::SemaphoreCreateInfo semaphoreCreateInfo;
-    //semaphoreCreateInfo.setPNext(&semTypeCreateInfo);
-    if(!(computeGraphicsSemaphore = device->createSemaphoreUnique(semaphoreCreateInfo)))
-        throw std::runtime_error("Cannot create compute-graphcs semaphore.");
+        /*vk::SemaphoreTypeCreateInfo semTypeCreateInfo;
+        semTypeCreateInfo .setSemaphoreType(vk::SemaphoreType::eBinary)//eTimeline)
+                            .setInitialValue(0);*/
+        vk::SemaphoreCreateInfo semaphoreCreateInfo;
+        //semaphoreCreateInfo.setPNext(&semTypeCreateInfo);
+        if(!(computePipelines.back()->finishedSemaphore = device->createSemaphoreUnique(semaphoreCreateInfo)))
+            throw std::runtime_error("Cannot create compute semaphore.");
+
+        
+        if(i != 0)
+            computePipelines.back()->waitSemaphores.push_back(*computePipelines[i-1]->finishedSemaphore);
+
+        computePipelines.back()->submitInfo
+        .setWaitSemaphoreCount(computePipelines.back()->waitSemaphores.size()) 
+        .setPWaitSemaphores(computePipelines.back()->waitSemaphores.data())
+        .setCommandBufferCount(1)
+        .setPCommandBuffers(&*(computePipelines[i]->commandBuffer))
+        .setSignalSemaphoreCount(1)
+        .setPSignalSemaphores(&*computePipelines[i]->finishedSemaphore);
+   }
     
 }
 
@@ -438,12 +458,12 @@ void GpuVulkan::createSpecializationInfo()
         specializationEntries.emplace_back();
         specializationEntries.back()   
             .setConstantID(i)
-            .setOffset(i*sizeof(int))
-            .setSize(sizeof(int));
+            .setOffset(i*sizeof(uint32_t))
+            .setSize(sizeof(uint32_t));
     }
     specializationInfo.setMapEntryCount(specializationEntries.size())
         .setPMapEntries(specializationEntries.data()) 
-        .setDataSize(sizeof(int))
+        .setDataSize(sizeof(int32_t)*shaderConstants.size())
         .setPData(shaderConstants.data());
 }
 
@@ -698,17 +718,18 @@ GpuVulkan::Buffer GpuVulkan::createBuffer(size_t size, vk::BufferUsageFlags usag
 void GpuVulkan::createBuffers()
 {
     //TODO, if needed in graphics, would be necessary to allocate one for each frame
-    generalUniforms.buffer = createBuffer(generalUniforms.SIZE, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    uniformBuffer = createBuffer(Gpu::uniforms.SIZE, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
 void GpuVulkan::updateUniforms()
 {
     void *data;
-    device->mapMemory(*generalUniforms.buffer.memory, 0, generalUniforms.SIZE, vk::MemoryMapFlags(), &data);
+    if(device->mapMemory(*uniformBuffer.memory, 0, Gpu::uniforms.SIZE, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
+        throw std::runtime_error("Cannot map memory for uniforms update.");
     uint32_t *intData{reinterpret_cast<uint32_t*>(data)};
-    memcpy(&intData[0], generalUniforms.floats.data(), generalUniforms.FLOAT_SIZE);
-    memcpy(&intData[generalUniforms.FLOAT_COUNT], generalUniforms.ints.data(), generalUniforms.INT_SIZE);
-    device->unmapMemory(*generalUniforms.buffer.memory); 
+    memcpy(&intData[0], Gpu::uniforms.getFloats(), Gpu::uniforms.FLOAT_SIZE);
+    memcpy(&intData[Gpu::uniforms.getFloatCount()], Gpu::uniforms.getInts(), uniforms.getIntCount());
+    device->unmapMemory(*uniformBuffer.memory); 
 }
 
 void GpuVulkan::createDescriptorPool()
@@ -721,7 +742,7 @@ void GpuVulkan::createDescriptorPool()
     samplerPoolSize .setDescriptorCount(setsNumber)
         .setType(vk::DescriptorType::eSampler); 
     vk::DescriptorPoolSize imagePoolSize;
-    imagePoolSize   .setDescriptorCount(frames.size())
+    imagePoolSize   .setDescriptorCount(frames.size()+textures.maxCount*setsNumber)
         .setType(vk::DescriptorType::eSampledImage); 
     vk::DescriptorPoolSize imageStoragePoolSize;
     imageStoragePoolSize   .setDescriptorCount(textures.maxCount*setsNumber)
@@ -770,9 +791,26 @@ void GpuVulkan::allocateAndCreateDescriptorSets()
 
 void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos)
 {
+    /*std::vector<vk::DescriptorImageInfo> tInfos;
+    for(auto &texture : textures.images)
+    {
+        vk::DescriptorImageInfo imageInfo;
+        imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+            .setImageView(*texture.imageView)
+            .setSampler({});
+        tInfos.push_back(imageInfo);
+    }*/
     vk::WriteDescriptorSet textureWriteSet;
     textureWriteSet.setDstSet(descriptorSet)
-        .setDstBinding(bindings.texture)
+        .setDstBinding(bindings.textures)
+        .setDstArrayElement(0)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setDescriptorCount(textures.maxCount)
+        .setPImageInfo(imageInfos.data());
+    
+    vk::WriteDescriptorSet imageWriteSet;
+    imageWriteSet.setDstSet(descriptorSet)
+        .setDstBinding(bindings.images)
         .setDstArrayElement(0)
         .setDescriptorType(vk::DescriptorType::eStorageImage)
         .setDescriptorCount(textures.maxCount)
@@ -790,9 +828,9 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
 
     
     vk::DescriptorBufferInfo bufferInfo;
-    bufferInfo  .setBuffer(*generalUniforms.buffer.buffer)
+    bufferInfo  .setBuffer(*uniformBuffer.buffer)
                     .setOffset(0)
-                    .setRange(generalUniforms.SIZE);
+                    .setRange(Gpu::uniforms.SIZE);
      vk::WriteDescriptorSet uboWriteSet;
         uboWriteSet.setDstSet(descriptorSet)
                 .setDstBinding(bindings.uniforms)
@@ -801,7 +839,7 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
                 .setDescriptorCount(1)
                 .setPBufferInfo(&bufferInfo);
 
-    std::vector<vk::WriteDescriptorSet> writeSets{textureWriteSet, samplerWriteSet, uboWriteSet};
+    std::vector<vk::WriteDescriptorSet> writeSets{textureWriteSet, imageWriteSet, samplerWriteSet, uboWriteSet};
     device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, {});     
 }
 
@@ -1038,13 +1076,11 @@ void GpuVulkan::allocateTextures()
 
 void GpuVulkan::setTexturesLayouts()
 {   
-    //for(int i=0; i<textures.MAX_COUNT; i++)
     for(auto &texture : textures.images)
     {
         transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
         transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral);//eShaderReadOnlyOptimal);
     }
-
 }
 
 vk::UniqueSampler GpuVulkan::createSampler()
@@ -1075,24 +1111,7 @@ vk::UniqueSampler GpuVulkan::createSampler()
 
 void GpuVulkan::render()
 {   
-    updateUniforms();
-     //for(auto const &pipeline : computePipelines)
-    //{   
-    //static int g = 0; 
-    //std::cerr << g++ << std::endl;
-        vk::SubmitInfo computeSubmitInfo;
-        computeSubmitInfo 
-        .setCommandBufferCount(1)
-        .setPCommandBuffers(&*(computePipelines[0]->commandBuffer))
-        .setSignalSemaphoreCount(1)
-        .setPSignalSemaphores(&*computeGraphicsSemaphore);
-        if(queues.compute.submit(1, &computeSubmitInfo, nullptr) != vk::Result::eSuccess)
-            throw std::runtime_error("Cannot submit compute command buffer.");
-   // }
-    std::cerr <<"aa";
     while (vk::Result::eTimeout == device->waitForFences(1, &*pipelineSync.at(processedFrame).fence, VK_TRUE, std::numeric_limits<uint64_t>::max())){};
-
-    std::cerr <<"aa";
     unsigned int imageID;
     if(device->acquireNextImageKHR(*swapChain, std::numeric_limits<uint64_t>::max(), *pipelineSync.at(processedFrame).semaphores.imgReady, {}, &imageID) == vk::Result::eErrorOutOfDateKHR)
     {
@@ -1100,13 +1119,18 @@ void GpuVulkan::render()
         return;
     }
 
-    std::vector<vk::PipelineStageFlags> waitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
-    std::vector<vk::Semaphore> waitSemaphores{*pipelineSync.at(processedFrame).semaphores.imgReady, *computeGraphicsSemaphore}; 
+    updateUniforms();
+
+    for(auto const &pipeline : computePipelines)
+        if(queues.compute.submit(1, &(pipeline->submitInfo), nullptr) != vk::Result::eSuccess)
+            throw std::runtime_error("Cannot submit compute command buffer.");
+
+    std::vector<vk::Semaphore> waitSemaphores{*pipelineSync.at(processedFrame).semaphores.imgReady, *computePipelines.back()->finishedSemaphore}; 
 
     vk::SubmitInfo submitInfo;
     submitInfo  .setWaitSemaphoreCount(waitSemaphores.size())
         .setPWaitSemaphores(waitSemaphores.data())
-        .setPWaitDstStageMask(waitStages.data())
+        .setPWaitDstStageMask(graphicsWaitStages.data())
         .setCommandBufferCount(1)
         .setPCommandBuffers(&*frames[imageID]->commandBuffer)
         .setSignalSemaphoreCount(1)

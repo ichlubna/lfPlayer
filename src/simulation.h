@@ -20,4 +20,5 @@ class Simulation
         void processInputs();
         double previousX{0.0};
         double previousY{0.0};
+        Inputs *inputs;
 };

@@ -10,5 +10,5 @@ void main()
 {
     const ivec2 outCoords = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
     float test = (outCoords.x>960+uniforms.focus) ? 1.0 : 0.5;
-    imageStore(textures[0], outCoords, vec4(test,1.0,1.0,1.0));
+    imageStore(images[0], outCoords, vec4(test,1.0,1.0,1.0));
 }
