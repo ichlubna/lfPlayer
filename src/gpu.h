@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include "window.h"
+#include "resources.h"
 
 class Gpu
 {
@@ -31,12 +32,21 @@ class Gpu
             int &switchView{ints[0]};
         } uniforms; 
 
+        class LfInfo
+        {
+            public:
+            unsigned int width;
+            unsigned int height;
+            unsigned int rows;
+            unsigned int cols;
+        };
+
+        virtual void loadFrameTextures(std::vector<std::vector<Resources::Image>> images) = 0;
 		virtual void render() = 0;
-		Gpu(Window *w, int tw, int th) : windowPtr{w}, textureWidth{tw}, textureHeight{th} {};
+		Gpu(Window *w, LfInfo lf) : windowPtr{w}, lfInfo{lf}{};
 	protected:
 		Window *windowPtr;
-        int textureWidth;
-        int textureHeight;
+        LfInfo lfInfo;
 };
 
 #endif

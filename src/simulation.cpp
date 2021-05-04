@@ -1,5 +1,6 @@
 #include <chrono>
 #include <thread>
+#include <filesystem>
 #include "simulation.h"
 #include "gpuVulkan.h"
 #include "windowGlfw.h"
@@ -17,16 +18,27 @@ Simulation::Simulation(std::string filename, GpuAPI gpuApi, WindowAPI windowApi)
 		break;
 	}
 
+
+    //if(std::filesystem::is_directory(filename))
+    auto lightfield = Resources::loadLightfield(filename);
+    Gpu::LfInfo lfInfo;
+    lfInfo.width = lightfield.front().front().width;
+    lfInfo.height = lightfield.front().front().height;
+    lfInfo.rows = lightfield.size();
+    lfInfo.cols = lightfield.front().size();
+
 	switch(gpuApi)
 	{
 		case GPU_VULKAN:
-			gpu = std::make_unique<GpuVulkan>(window.get());
+			gpu = std::make_unique<GpuVulkan>(window.get(), lfInfo);
 		break;
 		
 		default:
 			throw std::runtime_error("Selected GPU API not implemented.");
 		break;
-	}	
+	}
+
+    gpu->loadFrameTextures(lightfield);
 }
 
 void Simulation::processInputs()

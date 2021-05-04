@@ -10,7 +10,7 @@ class Resources
        int width, height, channels;
        std::vector<char> pixels; 
     };
-    [[nodiscard]] std::shared_ptr<Image> loadImage(std::string path) const;
-    std::vector<std::vector<Image>> loadLightfield(std::string path) const;
+    [[nodiscard]] static std::shared_ptr<Image> loadImage(std::string path);
+    static std::vector<std::vector<Image>> loadLightfield(std::string path);
 
 };

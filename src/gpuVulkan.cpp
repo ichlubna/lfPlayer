@@ -392,7 +392,7 @@ void GpuVulkan::createComputeCommandBuffers()
             throw std::runtime_error("Compute command buffer recording couldn't begin.");
         pipeline->commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(pipeline->pipeline));
         pipeline->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(pipeline->pipelineLayout), 0, 1, &*pipeline->descriptorSet, 0, {});
-        pipeline->commandBuffer->dispatch(Gpu::textureWidth/LOCAL_SIZE_X, Gpu::textureHeight/LOCAL_SIZE_Y,1); 
+        pipeline->commandBuffer->dispatch(Gpu::lfInfo.width/LOCAL_SIZE_X, Gpu::lfInfo.height/LOCAL_SIZE_Y,1); 
         pipeline->commandBuffer->end();
     }
 }
@@ -1062,15 +1062,21 @@ vk::UniqueImageView GpuVulkan::createImageView(vk::Image image, vk::Format forma
     return imageView;
 }
 
-void GpuVulkan::allocateTextures()
+void GpuVulkan::allocateTextureResources(Textures &textures, vk::ImageUsageFlags usageFlags=vk::ImageUsageFlagBits())
 {
-    for(int i=0; i<textures.maxCount; i++)
+    for(unsigned int i=0; i<textures.maxCount; i++)
     {
-        vk::ImageUsageFlags usage{vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage};
+        vk::ImageUsageFlags usage{vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled | usageFlags};
         textures.images.emplace_back();
         textures.images.back().image = createImage(textures.width, textures.height, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, usage, vk::MemoryPropertyFlagBits::eDeviceLocal);
         textures.images.back().imageView = createImageView(*textures.images[i].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
     }
+}
+
+void GpuVulkan::allocateTextures()
+{
+    allocateTextureResources(textures, vk::ImageUsageFlagBits::eStorage);
+    allocateTextureResources(frameTextures);
     sampler = createSampler();
 }
 
@@ -1080,6 +1086,30 @@ void GpuVulkan::setTexturesLayouts()
     {
         transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
         transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral);//eShaderReadOnlyOptimal);
+    }
+}
+
+void GpuVulkan::loadFrameTextures(std::vector<std::vector<Resources::Image>>  images)
+{
+    if(images.size() > frameTextures.maxCount)
+        throw std::runtime_error("Not enough textures allocated for the input frames.");
+        
+    size_t size = images.front().front().channels * images.front().front().width * images.front().front().height;
+
+    for(unsigned int row=0; row<images.size(); row++)
+    for(unsigned int col=0; col<images.front().size(); col++)
+    {
+        unsigned int linearIndex = images.front().size()*row + col;
+        Buffer stagingBuffer = createBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        void *data;
+
+        if(device->mapMemory(*stagingBuffer.memory, 0, size, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
+            throw std::runtime_error("Cannot map memory for uniforms update.");
+        memcpy(data, images[row][col].pixels.data(), size);
+        device->unmapMemory(*stagingBuffer.memory); 
+        transitionImageLayout(*frameTextures.images[linearIndex].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+        copyBufferToImage(*stagingBuffer.buffer, *frameTextures.images[linearIndex].image.textureImage, images[row][col].width, images[row][col].height);
+        transitionImageLayout(*frameTextures.images[linearIndex].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
     }
 }
 
@@ -1186,10 +1216,8 @@ void GpuVulkan::recreateSwapChain()
     createGraphicsCommandBuffers();
 }
 
-GpuVulkan::GpuVulkan(Window* w, int textWidth, int textHeight) : Gpu(w, textWidth, textHeight)
+GpuVulkan::GpuVulkan(Window* w, Gpu::LfInfo lfInfo) : Gpu(w, lfInfo)
 {
-    textures.width = textWidth;
-    textures.height = textHeight;
     createInstance();
     selectPhysicalDevice();
     createDevice();

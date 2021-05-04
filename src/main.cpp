@@ -16,7 +16,7 @@ int main(int argc, char **argv)
                  "- video with h265 stream" << std::endl <<
                  "or" << std::endl <<
                  "lfPlayer folderWithImages" << std::endl <<
-                 "- folder with lf grid images with row_column naming such as: 0_0.jpg, 0_1.jpg, ..." << std::endl;
+                 "- folder with lf grid images with row_column (start with zero) naming such as: 0_0.jpg, 0_1.jpg, ..." << std::endl;
         return EXIT_FAILURE;
     }
 

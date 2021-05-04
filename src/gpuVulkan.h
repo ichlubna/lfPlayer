@@ -5,7 +5,7 @@ class GpuVulkan : public Gpu
 {
 	public:
 		void render() override;
-		GpuVulkan(Window* w, int textWidth=1920, int textHeight=1080);
+		GpuVulkan(Window* w, Gpu::LfInfo lf);
 		~GpuVulkan();
 	private: 
         const class
@@ -63,17 +63,19 @@ class GpuVulkan : public Gpu
             vk::UniqueDescriptorSet descriptorSet;
         };
         std::vector<std::unique_ptr<SwapChainFrame>> frames;
+        Texture depthImage;
         
         class Textures
         {
             public:
-            const int maxCount{2};
-            int width{1920};
-            int height{1080};
+            const unsigned int maxCount{2};
+            unsigned int width{1920};
+            unsigned int height{1080};
             std::vector<Texture> images;
+            Textures(unsigned int count, unsigned int w, unsigned int h) : maxCount{count}, width{w}, height{h} {};
         };
-        Textures textures;
-        Texture depthImage;
+        Textures textures{2, Gpu::lfInfo.width, Gpu::lfInfo.height};
+        Textures frameTextures{lfInfo.cols*lfInfo.rows, lfInfo.width, lfInfo.height};
  
         const int CONCURRENT_FRAMES_COUNT = 2;
         unsigned int processedFrame{0};
@@ -119,7 +121,7 @@ class GpuVulkan : public Gpu
         static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
         static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
 
-        std::vector<int32_t> shaderConstants{textures.maxCount, LOCAL_SIZE_X, LOCAL_SIZE_Y}; 
+        std::vector<int32_t> shaderConstants{static_cast<int>(textures.maxCount), LOCAL_SIZE_X, LOCAL_SIZE_Y, static_cast<int>(Gpu::lfInfo.cols), static_cast<int>(Gpu::lfInfo.rows)}; 
         std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
         std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
  
@@ -151,6 +153,7 @@ class GpuVulkan : public Gpu
         } buffers;
 
         //TODO encapsulate to general, graphics, compute
+        void loadFrameTextures(std::vector<std::vector<Resources::Image>> images) override;
         std::vector<char> loadShader(const char* path);
         vk::UniqueShaderModule createShaderModule(std::vector<char> source);
 		void createInstance();
@@ -177,6 +180,7 @@ class GpuVulkan : public Gpu
         void oneTimeCommandsEnd(vk::CommandBuffer commandBuffer);
         void transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
         void createPipelineSync();
+        void allocateTextureResources(Textures &textures, vk::ImageUsageFlags usageFlags);
         void allocateTextures();
         void setTexturesLayouts();
         Image createImage(unsigned int width, unsigned int height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties);
