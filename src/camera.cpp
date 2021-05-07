@@ -37,6 +37,12 @@ void Camera::move(Direction direction, float amount)
         break;
     }
 }
+
+void Camera::clampPosition(glm::vec2 range)
+{
+    position.xy() = glm::clamp(position.xy(), range.x, range.y);
+}
+
 void Camera::turn(float p, float y)
 {
     pitch += p;

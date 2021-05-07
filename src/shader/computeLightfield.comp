@@ -1,0 +1,10 @@
+
+#version 450
+#include "computeHeader.glsl"
+
+void main()
+{
+    const ivec2 outCoords = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+    if(imageLoad(images[0], outCoords).x == 1.0)
+        imageStore(images[0], outCoords, vec4(1.0,0.0,0.0,1.0));
+}

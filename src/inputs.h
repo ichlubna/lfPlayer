@@ -29,6 +29,8 @@ class Inputs
         void setMouseScroll(double s);
         void press(Key key);
         void release(Key key);
+
+        bool pressedAny() const {return keys!=0;}
         
         template <typename... Args>
         bool pressed(Args... args) const

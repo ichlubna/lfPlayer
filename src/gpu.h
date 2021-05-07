@@ -12,41 +12,49 @@ class Gpu
         class Uniforms
         {   
             private:
-            static constexpr size_t FLOAT_COUNT{1};
-            static constexpr size_t INT_COUNT{1};
-            static constexpr size_t UNIFORM_SIZE{4};
-            std::array<float, FLOAT_COUNT> floats{};
-            std::array<int32_t, INT_COUNT> ints{};
+            static constexpr size_t UNIFORM_COUNT{6};
+            using Data = std::array<int32_t, UNIFORM_COUNT>; 
+            Data data{};
 
             public:
-            static constexpr size_t FLOAT_SIZE{FLOAT_COUNT*UNIFORM_SIZE};
-            static constexpr size_t INT_SIZE{INT_COUNT*UNIFORM_SIZE};
-            static constexpr size_t SIZE{(FLOAT_COUNT+INT_COUNT)*UNIFORM_SIZE};
+            static constexpr size_t SIZE{UNIFORM_COUNT*sizeof(int32_t)};
 
-            const float* getFloats() {return floats.data();};
-            const int* getInts() {return ints.data();};
-            constexpr size_t getFloatCount() {return FLOAT_COUNT;};
-            constexpr size_t getIntCount() {return INT_COUNT;};
+            const Data* getData() {return &data;};
 
-            float &focus{floats[0]};
-            int &switchView{ints[0]};
+            float &focus{reinterpret_cast<float&>(data[0])};
+            int &switchView{data[1]};
+            std::array<float*, 4> lfWeights{    reinterpret_cast<float*>(&data[2]),
+                                                reinterpret_cast<float*>(&data[3]),
+                                                reinterpret_cast<float*>(&data[4]),
+                                                reinterpret_cast<float*>(&data[5])};
+
         } uniforms; 
 
         class LfInfo
         {
             public:
-            unsigned int width;
-            unsigned int height;
-            unsigned int rows;
-            unsigned int cols;
+            unsigned int width{1920};
+            unsigned int height{1080};
+            unsigned int rows{8};
+            unsigned int cols{8};
         };
 
-        virtual void loadFrameTextures(std::vector<std::vector<Resources::Image>> images) = 0;
+        class LfCurrentFrame
+        {
+            public:
+            unsigned int index{0};
+            float weight{0};
+            bool changed{false};
+        };
+
+        virtual void loadFrameTextures(Resources::ImageGrid images) = 0;
+        void updateFrameIndices(std::vector<LfCurrentFrame> &frames);
 		virtual void render() = 0;
 		Gpu(Window *w, LfInfo lf) : windowPtr{w}, lfInfo{lf}{};
 	protected:
 		Window *windowPtr;
         LfInfo lfInfo;
+        std::vector<LfCurrentFrame> currentFrames{4};
 };
 
 #endif

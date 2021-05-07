@@ -1,3 +1,4 @@
+#include <memory>
 #include <vulkan/vulkan.hpp>
 #include "gpu.h"
 
@@ -79,10 +80,12 @@ class GpuVulkan : public Gpu
  
         const int CONCURRENT_FRAMES_COUNT = 2;
         unsigned int processedFrame{0};
-      
+     
+        std::string appName{"Lightfield Player"};
+        std::string engineName{"I don't know"}; 
         std::string vertexShaderPath{"../precompiled/vertex.spv"};
         std::string fragmentShaderPath{"../precompiled/fragment.spv"};
-        std::vector<std::string> computeShaderPaths{"../precompiled/computeFocusMap.spv"};
+        std::vector<std::string> computeShaderPaths{"../precompiled/computeFocusMap.spv", "../precompiled/computeLightfield.spv"};
        
         std::vector<vk::SpecializationMapEntry> specializationEntries;
         vk::SpecializationInfo specializationInfo;
@@ -111,21 +114,25 @@ class GpuVulkan : public Gpu
             vk::UniquePipelineLayout pipelineLayout;
             vk::UniqueCommandBuffer commandBuffer;
             vk::SubmitInfo submitInfo;
-            vk::UniqueDescriptorSet descriptorSet; 
             vk::UniqueSemaphore finishedSemaphore;
             std::vector<vk::Semaphore> waitSemaphores{}; 
         };
         std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
+        vk::UniqueDescriptorSet generalDescriptorSet; 
+        std::vector<vk::WriteDescriptorSet> writeSets;
+        int textureWriteSetIndex{0};
         static constexpr int WARP_SIZE{32};
         static constexpr int LOCAL_SIZE_X{WARP_SIZE/2};
         static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
         static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
 
-        std::vector<int32_t> shaderConstants{static_cast<int>(textures.maxCount), LOCAL_SIZE_X, LOCAL_SIZE_Y, static_cast<int>(Gpu::lfInfo.cols), static_cast<int>(Gpu::lfInfo.rows)}; 
+        std::vector<int32_t> shaderConstants{static_cast<int>(textures.maxCount+Gpu::currentFrames.size()),
+                                             LOCAL_SIZE_X, LOCAL_SIZE_Y, static_cast<int>(Gpu::lfInfo.cols), static_cast<int>(Gpu::lfInfo.rows)}; 
         std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
         std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
- 
+
         Buffer uniformBuffer;
+        vk::PushConstantRange pushConstantRange{vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eFragment, 0, Gpu::Uniforms::SIZE};
 
 		std::vector<const char*> validationLayers;
 
@@ -153,9 +160,10 @@ class GpuVulkan : public Gpu
         } buffers;
 
         //TODO encapsulate to general, graphics, compute
-        void loadFrameTextures(std::vector<std::vector<Resources::Image>> images) override;
+        void loadFrameTextures(Resources::ImageGrid images) override;
         std::vector<char> loadShader(const char* path);
         vk::UniqueShaderModule createShaderModule(std::vector<char> source);
+        void updateDescriptors();
 		void createInstance();
 		void selectPhysicalDevice();
 		void createDevice();

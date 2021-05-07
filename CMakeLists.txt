@@ -8,6 +8,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 set(SOURCES 
 src/main.cpp
+src/gpu.cpp
 src/gpuVulkan.cpp
 src/windowGlfw.cpp
 src/simulation.cpp
@@ -37,6 +38,7 @@ set(SHADER_LIST
 fragment.frag
 vertex.vert
 computeFocusMap.comp
+computeLightfield.comp
 )
 
 add_custom_target(shader WORKING_DIRECTORY ${CMAKE_PROJECT_DIR})

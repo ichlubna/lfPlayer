@@ -1,3 +1,4 @@
+#define GLM_SWIZZLE
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -17,6 +18,7 @@ class Camera
         float near{0.1f};
         float far{100.0f};
         glm::mat4 getViewProjectionMatrix();
+        void clampPosition(glm::vec2 range);
         Camera();
     private:
         glm::vec3 up;

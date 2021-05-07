@@ -15,11 +15,11 @@ constexpr bool DEBUG = false;
 void GpuVulkan::createInstance()
 {
     vk::ApplicationInfo appInfo;
-    appInfo	.setPApplicationName("Engine")
+    appInfo	.setPApplicationName(appName.c_str())
         .setApiVersion(VK_MAKE_VERSION(1,0,0))
         .setEngineVersion(VK_MAKE_VERSION(1,0,0))
         .setApplicationVersion(VK_MAKE_VERSION(1,0,0))
-        .setPEngineName("I don't know");
+        .setPEngineName(engineName.c_str());
 
     std::vector<const char*> extensions = {"VK_KHR_surface"};
 
@@ -362,7 +362,7 @@ void GpuVulkan::createDescriptorSetLayout()
         .setDescriptorCount(textures.maxCount)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);    
-
+    
     std::vector<vk::DescriptorSetLayoutBinding> bindings{uboLayoutBinding, samplerLayoutBinding, imageLayoutBinding, textureLayoutBinding};
 
     vk::DescriptorSetLayoutCreateInfo createInfo;
@@ -391,7 +391,8 @@ void GpuVulkan::createComputeCommandBuffers()
         if(pipeline->commandBuffer->begin(&bufferBeginInfo) != vk::Result::eSuccess)
             throw std::runtime_error("Compute command buffer recording couldn't begin.");
         pipeline->commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(pipeline->pipeline));
-        pipeline->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(pipeline->pipelineLayout), 0, 1, &*pipeline->descriptorSet, 0, {});
+        pipeline->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(pipeline->pipelineLayout), 0, 1, &*generalDescriptorSet, 0, {});
+        //pipeline->commandBuffer->pushConstants(*pipeline->pipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
         pipeline->commandBuffer->dispatch(Gpu::lfInfo.width/LOCAL_SIZE_X, Gpu::lfInfo.height/LOCAL_SIZE_Y,1); 
         pipeline->commandBuffer->end();
     }
@@ -403,7 +404,7 @@ void GpuVulkan::createComputePipelines()
     layoutCreateInfo  .setSetLayoutCount(1)
                       .setPSetLayouts(&*descriptorSetLayout)
                       .setPushConstantRangeCount(0)
-                      .setPPushConstantRanges({});
+                      .setPPushConstantRanges(&pushConstantRange);
 
     for(size_t i=0; i<computeShaderPaths.size(); i++)
     { 
@@ -443,6 +444,7 @@ void GpuVulkan::createComputePipelines()
         computePipelines.back()->submitInfo
         .setWaitSemaphoreCount(computePipelines.back()->waitSemaphores.size()) 
         .setPWaitSemaphores(computePipelines.back()->waitSemaphores.data())
+        .setPWaitDstStageMask(computeWaitStages.data())
         .setCommandBufferCount(1)
         .setPCommandBuffers(&*(computePipelines[i]->commandBuffer))
         .setSignalSemaphoreCount(1)
@@ -555,7 +557,7 @@ void GpuVulkan::createGraphicsPipeline()
     layoutInfo  .setSetLayoutCount(1)
         .setPSetLayouts(&*descriptorSetLayout)
         .setPushConstantRangeCount(0)
-        .setPPushConstantRanges({});
+        .setPPushConstantRanges(&pushConstantRange);
 
     if(!(graphicsPipelineLayout = device->createPipelineLayoutUnique(layoutInfo)))
         throw std::runtime_error("Cannot create pipeline layout.");
@@ -653,6 +655,7 @@ void GpuVulkan::createGraphicsCommandBuffers()
         frame->commandBuffer->beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
         frame->commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
         frame->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipelineLayout, 0, 1, &*frame->descriptorSet, 0, {});
+        //frame->commandBuffer->pushConstants(*graphicsPipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
         frame->commandBuffer->draw(3, 1, 0, 0);
         frame->commandBuffer->endRenderPass();
 
@@ -717,18 +720,18 @@ GpuVulkan::Buffer GpuVulkan::createBuffer(size_t size, vk::BufferUsageFlags usag
 
 void GpuVulkan::createBuffers()
 {
-    //TODO, if needed in graphics, would be necessary to allocate one for each frame
     uniformBuffer = createBuffer(Gpu::uniforms.SIZE, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
 void GpuVulkan::updateUniforms()
 {
+    for(int i=0; i<Gpu::currentFrames.size(); i++)
+        *Gpu::uniforms.lfWeights[i] = Gpu::currentFrames[i].weight;
+
     void *data;
     if(device->mapMemory(*uniformBuffer.memory, 0, Gpu::uniforms.SIZE, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
         throw std::runtime_error("Cannot map memory for uniforms update.");
-    uint32_t *intData{reinterpret_cast<uint32_t*>(data)};
-    memcpy(&intData[0], Gpu::uniforms.getFloats(), Gpu::uniforms.FLOAT_SIZE);
-    memcpy(&intData[Gpu::uniforms.getFloatCount()], Gpu::uniforms.getInts(), uniforms.getIntCount());
+    memcpy(data, Gpu::uniforms.getData()->data(), Gpu::uniforms.SIZE);
     device->unmapMemory(*uniformBuffer.memory); 
 }
 
@@ -742,7 +745,7 @@ void GpuVulkan::createDescriptorPool()
     samplerPoolSize .setDescriptorCount(setsNumber)
         .setType(vk::DescriptorType::eSampler); 
     vk::DescriptorPoolSize imagePoolSize;
-    imagePoolSize   .setDescriptorCount(frames.size()+textures.maxCount*setsNumber)
+    imagePoolSize   .setDescriptorCount(frames.size()+(textures.maxCount+frameTextures.maxCount)*setsNumber)
         .setType(vk::DescriptorType::eSampledImage); 
     vk::DescriptorPoolSize imageStoragePoolSize;
     imageStoragePoolSize   .setDescriptorCount(textures.maxCount*setsNumber)
@@ -774,6 +777,15 @@ void GpuVulkan::allocateAndCreateDescriptorSets()
             .setSampler({});
         imageInfos.push_back(imageInfo);
     }
+    //binding placeholders for frames
+    for(int i=0; i<Gpu::currentFrames.size(); i++)
+    {
+        vk::DescriptorImageInfo imageInfo;
+        imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
+            .setImageView(*textures.images.front().imageView)
+            .setSampler({});
+        imageInfos.push_back(imageInfo);
+    }
      
     //TODO change to one final image which will be read in graphics and write in compute
     for(auto &frame : frames)
@@ -782,11 +794,8 @@ void GpuVulkan::allocateAndCreateDescriptorSets()
         createDescriptorSets(*(frame->descriptorSet), imageInfos);
     }
     
-    for(auto &pipeline : computePipelines)
-    {
-        pipeline->descriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front());
-        createDescriptorSets(*(pipeline->descriptorSet), imageInfos);
-    }
+    generalDescriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front());
+    createDescriptorSets(*(generalDescriptorSet), imageInfos); 
 }
 
 void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos)
@@ -800,13 +809,6 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
             .setSampler({});
         tInfos.push_back(imageInfo);
     }*/
-    vk::WriteDescriptorSet textureWriteSet;
-    textureWriteSet.setDstSet(descriptorSet)
-        .setDstBinding(bindings.textures)
-        .setDstArrayElement(0)
-        .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(textures.maxCount)
-        .setPImageInfo(imageInfos.data());
     
     vk::WriteDescriptorSet imageWriteSet;
     imageWriteSet.setDstSet(descriptorSet)
@@ -815,6 +817,7 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
         .setDescriptorType(vk::DescriptorType::eStorageImage)
         .setDescriptorCount(textures.maxCount)
         .setPImageInfo(imageInfos.data());
+    writeSets.push_back(imageWriteSet);
 
     vk::WriteDescriptorSet samplerWriteSet;
     vk::DescriptorImageInfo samplerInfo;
@@ -825,7 +828,7 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
         .setDescriptorType(vk::DescriptorType::eSampler)
         .setDescriptorCount(1)
         .setPImageInfo(&samplerInfo);
-
+    writeSets.push_back(samplerWriteSet);
     
     vk::DescriptorBufferInfo bufferInfo;
     bufferInfo  .setBuffer(*uniformBuffer.buffer)
@@ -838,8 +841,18 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
                 .setDescriptorType(vk::DescriptorType::eUniformBuffer)
                 .setDescriptorCount(1)
                 .setPBufferInfo(&bufferInfo);
+    writeSets.push_back(uboWriteSet);
+    
+    vk::WriteDescriptorSet textureWriteSet;
+    textureWriteSet.setDstSet(descriptorSet)
+        .setDstBinding(bindings.textures)
+        .setDstArrayElement(0)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setDescriptorCount(textures.maxCount)
+        .setPImageInfo(imageInfos.data());
+    writeSets.push_back(textureWriteSet);
+    textureWriteSetIndex = writeSets.size()-1;
 
-    std::vector<vk::WriteDescriptorSet> writeSets{textureWriteSet, imageWriteSet, samplerWriteSet, uboWriteSet};
     device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, {});     
 }
 
@@ -1089,28 +1102,58 @@ void GpuVulkan::setTexturesLayouts()
     }
 }
 
-void GpuVulkan::loadFrameTextures(std::vector<std::vector<Resources::Image>>  images)
+void GpuVulkan::loadFrameTextures(Resources::ImageGrid images)
 {
     if(images.size() > frameTextures.maxCount)
         throw std::runtime_error("Not enough textures allocated for the input frames.");
         
-    size_t size = images.front().front().channels * images.front().front().width * images.front().front().height;
+    size_t size = images.front().front()->channels * images.front().front()->width * images.front().front()->height;
 
     for(unsigned int row=0; row<images.size(); row++)
-    for(unsigned int col=0; col<images.front().size(); col++)
-    {
-        unsigned int linearIndex = images.front().size()*row + col;
-        Buffer stagingBuffer = createBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        void *data;
+        for(unsigned int col=0; col<images.front().size(); col++)
+        {
+            unsigned int linearIndex = images.front().size()*row + col;
+            Buffer stagingBuffer = createBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            void *data;
 
-        if(device->mapMemory(*stagingBuffer.memory, 0, size, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
-            throw std::runtime_error("Cannot map memory for uniforms update.");
-        memcpy(data, images[row][col].pixels.data(), size);
-        device->unmapMemory(*stagingBuffer.memory); 
-        transitionImageLayout(*frameTextures.images[linearIndex].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-        copyBufferToImage(*stagingBuffer.buffer, *frameTextures.images[linearIndex].image.textureImage, images[row][col].width, images[row][col].height);
-        transitionImageLayout(*frameTextures.images[linearIndex].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+            if(device->mapMemory(*stagingBuffer.memory, 0, size, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
+                throw std::runtime_error("Cannot map memory for image upload.");
+            memcpy(data, images[row][col]->pixels.data(), size);
+            device->unmapMemory(*stagingBuffer.memory); 
+            transitionImageLayout(*frameTextures.images[linearIndex].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+            copyBufferToImage(*stagingBuffer.buffer, *frameTextures.images[linearIndex].image.textureImage, images[row][col]->width, images[row][col]->height);
+            transitionImageLayout(*frameTextures.images[linearIndex].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+        }
+}
+
+void GpuVulkan::updateDescriptors()
+{
+    std::vector<vk::DescriptorImageInfo> imageInfos;
+    for(auto &texture : textures.images)
+    {
+        vk::DescriptorImageInfo imageInfo;
+        imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
+            .setImageView(*texture.imageView)
+            .setSampler({});
+        imageInfos.push_back(imageInfo);
     }
+    for(const auto & frame : Gpu::currentFrames)
+    {
+        vk::DescriptorImageInfo imageInfo;
+        imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
+            .setImageView(*frameTextures.images[frame.index].imageView)
+            .setSampler({});
+        imageInfos.push_back(imageInfo);
+    }
+    vk::WriteDescriptorSet textureWriteSet;
+    textureWriteSet.setDstSet(*generalDescriptorSet)
+        .setDstBinding(bindings.textures)
+        .setDstArrayElement(0)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setDescriptorCount(textures.maxCount)
+        .setPImageInfo(imageInfos.data());
+    writeSets[textureWriteSetIndex] = textureWriteSet; 
+   device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, nullptr);
 }
 
 vk::UniqueSampler GpuVulkan::createSampler()
@@ -1150,6 +1193,7 @@ void GpuVulkan::render()
     }
 
     updateUniforms();
+    updateDescriptors();
 
     for(auto const &pipeline : computePipelines)
         if(queues.compute.submit(1, &(pipeline->submitInfo), nullptr) != vk::Result::eSuccess)
