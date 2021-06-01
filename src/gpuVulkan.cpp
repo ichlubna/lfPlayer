@@ -3,6 +3,7 @@
 #include <string.h>
 #include <iostream>
 #include <fstream>
+#include <limits>
 #include <vulkan/vulkan.hpp>
 #include "gpuVulkan.h"
 
@@ -214,6 +215,10 @@ void GpuVulkan::createSwapChain()
     if(surfaceCapabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.maxImageCount )
         imageCount = surfaceCapabilities.maxImageCount;
 
+    if(imageCount < inFlightFrames.COUNT)
+        throw std::runtime_error("Not enough swap chain frames for the specified buffering");
+    imageCount = inFlightFrames.COUNT;
+
     swapChainImgFormat = format.format;	
     vk::SwapchainCreateInfoKHR createInfo;
     createInfo	.setSurface(*surface)
@@ -240,17 +245,14 @@ void GpuVulkan::createSwapChain()
     if(!(swapChain = device->createSwapchainKHRUnique(createInfo)))
         throw std::runtime_error("Failed to create swap chain.");
     std::vector<vk::Image> swapChainImages = device->getSwapchainImagesKHR(*swapChain);
-    for(auto image : swapChainImages)
-    {
-        frames.push_back(std::make_unique<SwapChainFrame>());
-        frames.back()->image = image;
-    }
+    for(int i=0; i<swapChainImages.size(); i++)
+        inFlightFrames.perFrameData[i].frame.image = swapChainImages[i];
 }
 
 void GpuVulkan::createSwapChainImageViews()
 {
-    for(auto &frame : frames)
-        frame->imageView = createImageView(frame->image, swapChainImgFormat, vk::ImageAspectFlagBits::eColor);
+    for(auto &frameData : inFlightFrames.perFrameData)
+        frameData.frame.imageView = createImageView(frameData.frame.image, swapChainImgFormat, vk::ImageAspectFlagBits::eColor);
 }
 
 std::vector<char> GpuVulkan::loadShader(const char *path)
@@ -352,14 +354,14 @@ void GpuVulkan::createDescriptorSetLayout()
     vk::DescriptorSetLayoutBinding imageLayoutBinding;
     imageLayoutBinding.setBinding(bindings.images)
         .setDescriptorType(vk::DescriptorType::eStorageImage)
-        .setDescriptorCount(textures.maxCount)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);
 
     vk::DescriptorSetLayoutBinding textureLayoutBinding;
     textureLayoutBinding.setBinding(bindings.textures)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(textures.maxCount)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);    
     
@@ -375,26 +377,30 @@ void GpuVulkan::createDescriptorSetLayout()
 
 void GpuVulkan::createComputeCommandBuffers()
 {
-    for(auto &pipeline : computePipelines)
-    {
-        vk::CommandBufferAllocateInfo allocInfo;
-        allocInfo   .setCommandPool(*computeCommandPool)
-                    .setLevel(vk::CommandBufferLevel::ePrimary)
-                    .setCommandBufferCount(1);
-        if(!(pipeline->commandBuffer = std::move(device->allocateCommandBuffersUnique(allocInfo).front())))
-            throw std::runtime_error("Failed to allocate compute command buffers.");
+    for(auto &frameData : inFlightFrames.perFrameData)
+    {   
+        for(int i=0; i<computePipelines.size(); i++)
+        {
+            auto &submitData = frameData.computeSubmits[i];
+            vk::CommandBufferAllocateInfo allocInfo;
+            allocInfo   .setCommandPool(*computeCommandPool)
+                        .setLevel(vk::CommandBufferLevel::ePrimary)
+                        .setCommandBufferCount(1);
+            if(!(submitData.commandBuffer = std::move(device->allocateCommandBuffersUnique(allocInfo).front())))
+                throw std::runtime_error("Failed to allocate compute command buffers.");
 
-        vk::CommandBufferBeginInfo bufferBeginInfo;
-        bufferBeginInfo .setFlags(vk::CommandBufferUsageFlagBits::eSimultaneousUse)
-            .setPInheritanceInfo({});
+            vk::CommandBufferBeginInfo bufferBeginInfo;
+            bufferBeginInfo .setFlags(vk::CommandBufferUsageFlagBits::eSimultaneousUse)
+                .setPInheritanceInfo({});
 
-        if(pipeline->commandBuffer->begin(&bufferBeginInfo) != vk::Result::eSuccess)
-            throw std::runtime_error("Compute command buffer recording couldn't begin.");
-        pipeline->commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(pipeline->pipeline));
-        pipeline->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(pipeline->pipelineLayout), 0, 1, &*generalDescriptorSet, 0, {});
-        //pipeline->commandBuffer->pushConstants(*pipeline->pipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
-        pipeline->commandBuffer->dispatch(Gpu::lfInfo.width/LOCAL_SIZE_X, Gpu::lfInfo.height/LOCAL_SIZE_Y,1); 
-        pipeline->commandBuffer->end();
+            if(submitData.commandBuffer->begin(&bufferBeginInfo) != vk::Result::eSuccess)
+                throw std::runtime_error("Compute command buffer recording couldn't begin.");
+            submitData.commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipeline));
+            submitData.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipelineLayout), 0, 1, &*frameData.generalDescriptorSet, 0, {});
+            //pipeline->commandBuffer->pushConstants(*pipeline->pipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
+            submitData.commandBuffer->dispatch(Gpu::lfInfo.width/LOCAL_SIZE_X, Gpu::lfInfo.height/LOCAL_SIZE_Y,1); 
+            submitData.commandBuffer->end();
+        }
     }
 }
 
@@ -428,27 +434,26 @@ void GpuVulkan::createComputePipelines()
         if(resultValue.result != vk::Result::eSuccess)
             throw std::runtime_error("Cannot create compute pipeline.");
         computePipelines.back()->pipeline = std::move(resultValue.value);
-
-        /*vk::SemaphoreTypeCreateInfo semTypeCreateInfo;
-        semTypeCreateInfo .setSemaphoreType(vk::SemaphoreType::eBinary)//eTimeline)
-                            .setInitialValue(0);*/
-        vk::SemaphoreCreateInfo semaphoreCreateInfo;
-        //semaphoreCreateInfo.setPNext(&semTypeCreateInfo);
-        if(!(computePipelines.back()->finishedSemaphore = device->createSemaphoreUnique(semaphoreCreateInfo)))
-            throw std::runtime_error("Cannot create compute semaphore.");
-
         
-        if(i != 0)
-            computePipelines.back()->waitSemaphores.push_back(*computePipelines[i-1]->finishedSemaphore);
+        for(auto &frameData : inFlightFrames.perFrameData)
+        {   
+            auto &submitData = frameData.computeSubmits[i]; 
+            vk::SemaphoreCreateInfo semaphoreCreateInfo;
+            if(!(submitData.finishedSemaphore = device->createSemaphoreUnique(semaphoreCreateInfo)))
+                throw std::runtime_error("Cannot create compute semaphore.");
+            
+            if(i != 0)
+                submitData.waitSemaphores.push_back(*frameData.computeSubmits[i-1].finishedSemaphore);
 
-        computePipelines.back()->submitInfo
-        .setWaitSemaphoreCount(computePipelines.back()->waitSemaphores.size()) 
-        .setPWaitSemaphores(computePipelines.back()->waitSemaphores.data())
-        .setPWaitDstStageMask(computeWaitStages.data())
-        .setCommandBufferCount(1)
-        .setPCommandBuffers(&*(computePipelines[i]->commandBuffer))
-        .setSignalSemaphoreCount(1)
-        .setPSignalSemaphores(&*computePipelines[i]->finishedSemaphore);
+            submitData.submitInfo
+            .setWaitSemaphoreCount(submitData.waitSemaphores.size()) 
+            .setPWaitSemaphores(submitData.waitSemaphores.data())
+            .setPWaitDstStageMask(computeWaitStages.data())
+            .setCommandBufferCount(1)
+            .setPCommandBuffers(&*(submitData.commandBuffer))
+            .setSignalSemaphoreCount(1)
+            .setPSignalSemaphores(&*(submitData.finishedSemaphore));
+        }
    }
     
 }
@@ -597,9 +602,9 @@ void GpuVulkan::createGraphicsPipeline()
 
 void GpuVulkan::createFramebuffers()
 {
-    for(auto &frame : frames)
+    for(auto &frameData : inFlightFrames.perFrameData)
     {
-        std::vector<vk::ImageView> attachments = {*frame->imageView, *depthImage.imageView};
+        std::vector<vk::ImageView> attachments = {*frameData.frame.imageView, *depthImage.imageView};
 
         vk::FramebufferCreateInfo createInfo;
         createInfo  .setRenderPass(*renderPass)
@@ -609,7 +614,7 @@ void GpuVulkan::createFramebuffers()
             .setHeight(extent.height)
             .setLayers(1);
 
-        if(!(frame->frameBuffer = device->createFramebufferUnique(createInfo)))
+        if(!(frameData.frame.frameBuffer = device->createFramebufferUnique(createInfo)))
             throw std::runtime_error("Cannot create frame buffer.");
     }
 }
@@ -629,37 +634,37 @@ void GpuVulkan::createCommandPools()
 
 void GpuVulkan::createGraphicsCommandBuffers()
 {
-    for(auto &frame : frames)
+    for(auto &frameData : inFlightFrames.perFrameData)
     {
         vk::CommandBufferAllocateInfo allocInfo;
         allocInfo   .setCommandPool(*graphicsCommandPool)
             .setLevel(vk::CommandBufferLevel::ePrimary)
             .setCommandBufferCount(1);
-        if(!(frame->commandBuffer = std::move(device->allocateCommandBuffersUnique(allocInfo).front())))
+        if(!(frameData.frame.commandBuffer = std::move(device->allocateCommandBuffersUnique(allocInfo).front())))
             throw std::runtime_error("Failed to allocate command buffers.");
         vk::CommandBufferBeginInfo bufferBeginInfo;
         bufferBeginInfo .setFlags(vk::CommandBufferUsageFlagBits::eSimultaneousUse)
             .setPInheritanceInfo({});
 
-        if(frame->commandBuffer->begin(&bufferBeginInfo) != vk::Result::eSuccess)
+        if(frameData.frame.commandBuffer->begin(&bufferBeginInfo) != vk::Result::eSuccess)
             throw std::runtime_error("Command buffer recording couldn't begin.");
 
         vk::RenderPassBeginInfo passBeginInfo;
         std::vector<vk::ClearValue> clearValues{vk::ClearColorValue().setFloat32({0.0,0.0,0.0,1.0}), vk::ClearDepthStencilValue(1.0f, 0.0f)};
         passBeginInfo   .setRenderPass(*renderPass)
-            .setFramebuffer(*frame->frameBuffer)
+            .setFramebuffer(*frameData.frame.frameBuffer)
             .setRenderArea(vk::Rect2D(vk::Offset2D(), extent))
             .setClearValueCount(clearValues.size())
             .setPClearValues(clearValues.data());
 
-        frame->commandBuffer->beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
-        frame->commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
-        frame->commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipelineLayout, 0, 1, &*frame->descriptorSet, 0, {});
-        //frame->commandBuffer->pushConstants(*graphicsPipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
-        frame->commandBuffer->draw(3, 1, 0, 0);
-        frame->commandBuffer->endRenderPass();
+       frameData.frame.commandBuffer->beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
+       frameData.frame.commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+       frameData.frame.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipelineLayout, 0, 1, &*frameData.generalDescriptorSet, 0, {});
+       //frame->commandBuffer->pushConstants(*graphicsPipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
+       frameData.frame.commandBuffer->draw(3, 1, 0, 0);
+       frameData.frame.commandBuffer->endRenderPass();
 
-        frame->commandBuffer->end();
+       frameData.frame.commandBuffer->end();
         /* != vk::Result::eSuccess)
            throw std::runtime_error("Cannot record command buffer.");*/    
     }
@@ -667,16 +672,14 @@ void GpuVulkan::createGraphicsCommandBuffers()
 
 void GpuVulkan::createPipelineSync()
 {
-    pipelineSync.resize(CONCURRENT_FRAMES_COUNT);
-
-    for(auto &sync : pipelineSync)
+    for(auto &frameData : inFlightFrames.perFrameData)
     {
         vk::SemaphoreCreateInfo semCreateInfo;
         vk::FenceCreateInfo fenCreateInfo;
         fenCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
-        if( !(sync.semaphores.imgReady = device->createSemaphoreUnique(semCreateInfo)) ||
-                !(sync.semaphores.renderReady = device->createSemaphoreUnique(semCreateInfo)) ||
-                !(sync.fence = device->createFenceUnique(fenCreateInfo)))
+        if( !(frameData.drawSync.semaphores.imgReady = device->createSemaphoreUnique(semCreateInfo)) ||
+                !(frameData.drawSync.semaphores.renderReady = device->createSemaphoreUnique(semCreateInfo)) ||
+                !(frameData.drawSync.fence = device->createFenceUnique(fenCreateInfo)))
             throw std::runtime_error("Cannot create pipeline synchronization.");
     }
 }
@@ -720,24 +723,26 @@ GpuVulkan::Buffer GpuVulkan::createBuffer(size_t size, vk::BufferUsageFlags usag
 
 void GpuVulkan::createBuffers()
 {
-    uniformBuffer = createBuffer(Gpu::uniforms.SIZE, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    for(auto &frameData : inFlightFrames.perFrameData)
+        frameData.uniformBuffer = createBuffer(Gpu::uniforms.SIZE, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 }
 
 void GpuVulkan::updateUniforms()
 {
+    auto &frameData = inFlightFrames.currentFrame();
     for(int i=0; i<Gpu::currentFrames.size(); i++)
         *Gpu::uniforms.lfWeights[i] = Gpu::currentFrames[i].weight;
 
     void *data;
-    if(device->mapMemory(*uniformBuffer.memory, 0, Gpu::uniforms.SIZE, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
+    if(device->mapMemory(*frameData.uniformBuffer.memory, 0, Gpu::uniforms.SIZE, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
         throw std::runtime_error("Cannot map memory for uniforms update.");
     memcpy(data, Gpu::uniforms.getData()->data(), Gpu::uniforms.SIZE);
-    device->unmapMemory(*uniformBuffer.memory); 
+    device->unmapMemory(*frameData.uniformBuffer.memory); 
 }
 
 void GpuVulkan::createDescriptorPool()
 {
-    const int setsNumber = frames.size()+computeShaderPaths.size();
+    const int setsNumber = inFlightFrames.COUNT+computeShaderPaths.size();
     vk::DescriptorPoolSize uboPoolSize;
     uboPoolSize .setDescriptorCount(setsNumber)
         .setType(vk::DescriptorType::eUniformBuffer);  
@@ -745,10 +750,10 @@ void GpuVulkan::createDescriptorPool()
     samplerPoolSize .setDescriptorCount(setsNumber)
         .setType(vk::DescriptorType::eSampler); 
     vk::DescriptorPoolSize imagePoolSize;
-    imagePoolSize   .setDescriptorCount(frames.size()+(textures.maxCount+frameTextures.maxCount)*setsNumber)
+    imagePoolSize   .setDescriptorCount(inFlightFrames.COUNT+(PerFrameData::TEXTURE_COUNT+frameTextures.maxCount)*setsNumber)
         .setType(vk::DescriptorType::eSampledImage); 
     vk::DescriptorPoolSize imageStoragePoolSize;
-    imageStoragePoolSize   .setDescriptorCount(textures.maxCount*setsNumber)
+    imageStoragePoolSize   .setDescriptorCount(PerFrameData::TEXTURE_COUNT*setsNumber)
         .setType(vk::DescriptorType::eStorageImage); 
 
     std::vector<vk::DescriptorPoolSize> sizes{uboPoolSize, samplerPoolSize, imagePoolSize, imageStoragePoolSize};
@@ -767,38 +772,35 @@ void GpuVulkan::allocateAndCreateDescriptorSets()
     allocInfo   .setDescriptorPool(*descriptorPool)
         .setDescriptorSetCount(1)
         .setPSetLayouts(&*descriptorSetLayout);
-    
-    std::vector<vk::DescriptorImageInfo> imageInfos;
-    for(auto &texture : textures.images)
-    {
-        vk::DescriptorImageInfo imageInfo;
-        imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
-            .setImageView(*texture.imageView)
-            .setSampler({});
-        imageInfos.push_back(imageInfo);
+ 
+    for(auto &frameData : inFlightFrames.perFrameData)
+    {   
+        std::vector<vk::DescriptorImageInfo> imageInfos;
+        for(auto &texture : frameData.textures.images)
+        {
+            vk::DescriptorImageInfo imageInfo;
+            imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
+                .setImageView(*texture.imageView)
+                .setSampler({});
+            imageInfos.push_back(imageInfo);
+        }
+        //binding placeholders for frames
+        for(int i=0; i<Gpu::currentFrames.size(); i++)
+        {
+            vk::DescriptorImageInfo imageInfo;
+            imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
+                .setImageView(*frameData.textures.images.front().imageView)
+                .setSampler({});
+            imageInfos.push_back(imageInfo);
+        }
+ 
+        if(!(frameData.generalDescriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front())))
+            throw std::runtime_error("Cannot allocate descriptor set");
+        createDescriptorSets(*(frameData.generalDescriptorSet), imageInfos, frameData.uniformBuffer, *frameData.sampler); 
     }
-    //binding placeholders for frames
-    for(int i=0; i<Gpu::currentFrames.size(); i++)
-    {
-        vk::DescriptorImageInfo imageInfo;
-        imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
-            .setImageView(*textures.images.front().imageView)
-            .setSampler({});
-        imageInfos.push_back(imageInfo);
-    }
-     
-    //TODO change to one final image which will be read in graphics and write in compute
-    for(auto &frame : frames)
-    {
-        frame->descriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front());
-        createDescriptorSets(*(frame->descriptorSet), imageInfos);
-    }
-    
-    generalDescriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front());
-    createDescriptorSets(*(generalDescriptorSet), imageInfos); 
 }
 
-void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos)
+void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos , Buffer &uniformBuffer, vk::Sampler sampler)
 {
     /*std::vector<vk::DescriptorImageInfo> tInfos;
     for(auto &texture : textures.images)
@@ -815,13 +817,13 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
         .setDstBinding(bindings.images)
         .setDstArrayElement(0)
         .setDescriptorType(vk::DescriptorType::eStorageImage)
-        .setDescriptorCount(textures.maxCount)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT)
         .setPImageInfo(imageInfos.data());
     writeSets.push_back(imageWriteSet);
 
     vk::WriteDescriptorSet samplerWriteSet;
     vk::DescriptorImageInfo samplerInfo;
-    samplerInfo.setSampler(*sampler);
+    samplerInfo.setSampler(sampler);
     samplerWriteSet.setDstSet(descriptorSet)
         .setDstBinding(bindings.sampler)
         .setDstArrayElement(0)
@@ -848,7 +850,7 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
         .setDstBinding(bindings.textures)
         .setDstArrayElement(0)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(textures.maxCount)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT)
         .setPImageInfo(imageInfos.data());
     writeSets.push_back(textureWriteSet);
     textureWriteSetIndex = writeSets.size()-1;
@@ -1081,25 +1083,30 @@ void GpuVulkan::allocateTextureResources(Textures &textures, vk::ImageUsageFlags
     {
         vk::ImageUsageFlags usage{vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled | usageFlags};
         textures.images.emplace_back();
-        textures.images.back().image = createImage(textures.width, textures.height, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, usage, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        textures.images.back().image = createImage(Gpu::lfInfo.width, Gpu::lfInfo.height, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, usage, vk::MemoryPropertyFlagBits::eDeviceLocal);
         textures.images.back().imageView = createImageView(*textures.images[i].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
     }
 }
 
 void GpuVulkan::allocateTextures()
 {
-    allocateTextureResources(textures, vk::ImageUsageFlagBits::eStorage);
+    for(auto &frameData : inFlightFrames.perFrameData)
+    {
+        allocateTextureResources(frameData.textures, vk::ImageUsageFlagBits::eStorage);
+        frameData.sampler = createSampler();
+    }
     allocateTextureResources(frameTextures);
-    sampler = createSampler();
 }
 
 void GpuVulkan::setTexturesLayouts()
-{   
-    for(auto &texture : textures.images)
-    {
-        transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-        transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral);//eShaderReadOnlyOptimal);
-    }
+{  
+     
+    for(auto &frameData : inFlightFrames.perFrameData)
+        for(auto &texture : frameData.textures.images)
+        {
+            transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+            transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral);//eShaderReadOnlyOptimal);
+        }
 }
 
 void GpuVulkan::loadFrameTextures(Resources::ImageGrid images)
@@ -1127,7 +1134,7 @@ void GpuVulkan::loadFrameTextures(Resources::ImageGrid images)
 }
 
 void GpuVulkan::updateDescriptors()
-{
+{/*
     std::vector<vk::DescriptorImageInfo> imageInfos;
     for(auto &texture : textures.images)
     {
@@ -1153,7 +1160,7 @@ void GpuVulkan::updateDescriptors()
         .setDescriptorCount(textures.maxCount)
         .setPImageInfo(imageInfos.data());
     writeSets[textureWriteSetIndex] = textureWriteSet; 
-   device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, nullptr);
+   device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, nullptr);*/
 }
 
 vk::UniqueSampler GpuVulkan::createSampler()
@@ -1183,42 +1190,46 @@ vk::UniqueSampler GpuVulkan::createSampler()
 }
 
 void GpuVulkan::render()
-{   
-    while (vk::Result::eTimeout == device->waitForFences(1, &*pipelineSync.at(processedFrame).fence, VK_TRUE, std::numeric_limits<uint64_t>::max())){};
+{
+    auto &frameData = inFlightFrames.currentFrame();
+    if(device->waitForFences(1, &*frameData.drawSync.fence, VK_FALSE, std::numeric_limits<uint64_t>::max()) != vk::Result::eSuccess)
+        throw std::runtime_error("Waiting for fences takes too long");
+    //while (vk::Result::eTimeout == device->waitForFences(1, &*frameData.drawSync.fence, VK_TRUE, std::numeric_limits<uint64_t>::max())){};
+    if(device->resetFences(1, &*frameData.drawSync.fence) != vk::Result::eSuccess)
+        throw std::runtime_error("Cannot reset fences.");
+
     unsigned int imageID;
-    if(device->acquireNextImageKHR(*swapChain, std::numeric_limits<uint64_t>::max(), *pipelineSync.at(processedFrame).semaphores.imgReady, {}, &imageID) == vk::Result::eErrorOutOfDateKHR)
+    if(device->acquireNextImageKHR(*swapChain, std::numeric_limits<uint64_t>::max(), *frameData.drawSync.semaphores.imgReady, {}, &imageID) == vk::Result::eErrorOutOfDateKHR)
     {
         recreateSwapChain();
         return;
     }
 
     updateUniforms();
-    updateDescriptors();
+    //updateDescriptors();
 
-    for(auto const &pipeline : computePipelines)
-        if(queues.compute.submit(1, &(pipeline->submitInfo), nullptr) != vk::Result::eSuccess)
+    for(auto const &computeSubmit : frameData.computeSubmits)
+        if(queues.compute.submit(1, &(computeSubmit.submitInfo), nullptr) != vk::Result::eSuccess)
             throw std::runtime_error("Cannot submit compute command buffer.");
 
-    std::vector<vk::Semaphore> waitSemaphores{*pipelineSync.at(processedFrame).semaphores.imgReady, *computePipelines.back()->finishedSemaphore}; 
-
+    std::vector<vk::Semaphore> waitSemaphores{*frameData.drawSync.semaphores.imgReady, *frameData.computeSubmits.back().finishedSemaphore}; 
+    
     vk::SubmitInfo submitInfo;
     submitInfo  .setWaitSemaphoreCount(waitSemaphores.size())
         .setPWaitSemaphores(waitSemaphores.data())
         .setPWaitDstStageMask(graphicsWaitStages.data())
         .setCommandBufferCount(1)
-        .setPCommandBuffers(&*frames[imageID]->commandBuffer)
+        .setPCommandBuffers(&*frameData.frame.commandBuffer)
         .setSignalSemaphoreCount(1)
-        .setPSignalSemaphores(&*pipelineSync.at(processedFrame).semaphores.renderReady);
+        .setPSignalSemaphores(&*frameData.drawSync.semaphores.renderReady);
 
-    if(device->resetFences(1, &*pipelineSync.at(processedFrame).fence) != vk::Result::eSuccess)
-        throw std::runtime_error("Cannot reset fences.");
-
-    if(queues.graphics.submit(1, &submitInfo, *pipelineSync.at(processedFrame).fence) != vk::Result::eSuccess)
+    if(queues.graphics.submit(1, &submitInfo, *frameData.drawSync.fence) != vk::Result::eSuccess)
         throw std::runtime_error("Cannot submit draw command buffer.");
-
+    //device->waitForFences(1, &*frameData.drawSync.fence, VK_TRUE, std::numeric_limits<uint64_t>::max());
+//usleep(10000);
     vk::PresentInfoKHR presentInfo;
     presentInfo .setWaitSemaphoreCount(1)
-        .setPWaitSemaphores(&*pipelineSync.at(processedFrame).semaphores.renderReady)
+        .setPWaitSemaphores(&*frameData.drawSync.semaphores.renderReady)
         .setSwapchainCount(1)
         .setPSwapchains(&*swapChain)
         .setPImageIndices(&imageID);
@@ -1230,7 +1241,7 @@ void GpuVulkan::render()
         return;
     }
 
-    processedFrame = (processedFrame+1) % CONCURRENT_FRAMES_COUNT;
+    inFlightFrames.switchFrame();
 }
 
 void GpuVulkan::recreateSwapChain()
@@ -1245,7 +1256,6 @@ void GpuVulkan::recreateSwapChain()
 
     device->waitIdle();
 
-    frames.clear();
     graphicsPipeline.reset();
     graphicsPipelineLayout.reset();
     renderPass.reset();

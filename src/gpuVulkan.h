@@ -9,6 +9,12 @@ class GpuVulkan : public Gpu
 		GpuVulkan(Window* w, Gpu::LfInfo lf);
 		~GpuVulkan();
 	private: 
+        std::string appName{"Lightfield Player"};
+        std::string engineName{"I don't know"}; 
+        std::string vertexShaderPath{"../precompiled/vertex.spv"};
+        std::string fragmentShaderPath{"../precompiled/fragment.spv"};
+        inline static const std::vector<std::string> computeShaderPaths{"../precompiled/computeFocusMap.spv", "../precompiled/computeLightfield.spv"};
+
         const class
         {
             public:
@@ -29,7 +35,6 @@ class GpuVulkan : public Gpu
             } semaphores;
             vk::UniqueFence fence;
         };   
-        std::vector<PipelineSync> pipelineSync;
 
         class Buffer
         {
@@ -60,83 +65,57 @@ class GpuVulkan : public Gpu
             vk::UniqueImageView imageView;
             vk::UniqueFramebuffer frameBuffer;
             vk::UniqueCommandBuffer commandBuffer;
-            Buffer uniformBuffer;
-            vk::UniqueDescriptorSet descriptorSet;
         };
-        std::vector<std::unique_ptr<SwapChainFrame>> frames;
-        Texture depthImage;
         
         class Textures
         {
             public:
             const unsigned int maxCount{2};
-            unsigned int width{1920};
-            unsigned int height{1080};
             std::vector<Texture> images;
-            Textures(unsigned int count, unsigned int w, unsigned int h) : maxCount{count}, width{w}, height{h} {};
+            Textures(unsigned int count) : maxCount{count}{};
         };
-        Textures textures{2, Gpu::lfInfo.width, Gpu::lfInfo.height};
-        Textures frameTextures{lfInfo.cols*lfInfo.rows, lfInfo.width, lfInfo.height};
- 
-        const int CONCURRENT_FRAMES_COUNT = 2;
-        unsigned int processedFrame{0};
-     
-        std::string appName{"Lightfield Player"};
-        std::string engineName{"I don't know"}; 
-        std::string vertexShaderPath{"../precompiled/vertex.spv"};
-        std::string fragmentShaderPath{"../precompiled/fragment.spv"};
-        std::vector<std::string> computeShaderPaths{"../precompiled/computeFocusMap.spv", "../precompiled/computeLightfield.spv"};
-       
-        std::vector<vk::SpecializationMapEntry> specializationEntries;
-        vk::SpecializationInfo specializationInfo;
-
-        vk::UniqueSampler sampler;
-
-	    vk::UniqueInstance instance;
-		vk::PhysicalDevice physicalDevice;
-		vk::UniqueDevice device;
-		vk::UniqueSurfaceKHR surface;
-		vk::UniqueSwapchainKHR swapChain;
-        vk::Format swapChainImgFormat;
-	    vk::Extent2D extent;
-        vk::UniqueRenderPass renderPass;
-        vk::UniquePipelineLayout graphicsPipelineLayout;
-        vk::UniquePipeline graphicsPipeline;
-        vk::UniqueCommandPool graphicsCommandPool;
-        vk::UniqueCommandPool computeCommandPool;
-        vk::UniqueDescriptorSetLayout descriptorSetLayout;
-        vk::UniqueDescriptorPool descriptorPool;
 
         class ComputePipeline
         {
             public:
             vk::UniquePipeline pipeline;
             vk::UniquePipelineLayout pipelineLayout;
-            vk::UniqueCommandBuffer commandBuffer;
-            vk::SubmitInfo submitInfo;
-            vk::UniqueSemaphore finishedSemaphore;
-            std::vector<vk::Semaphore> waitSemaphores{}; 
         };
-        std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
-        vk::UniqueDescriptorSet generalDescriptorSet; 
-        std::vector<vk::WriteDescriptorSet> writeSets;
-        int textureWriteSetIndex{0};
-        static constexpr int WARP_SIZE{32};
-        static constexpr int LOCAL_SIZE_X{WARP_SIZE/2};
-        static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
-        static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
+        
+        class ComputeSubmitData
+        {
+            public:
+                std::vector<vk::Semaphore> waitSemaphores{}; 
+                vk::UniqueSemaphore finishedSemaphore;
+                vk::UniqueCommandBuffer commandBuffer;
+                vk::SubmitInfo submitInfo;
+        };
 
-        std::vector<int32_t> shaderConstants{static_cast<int>(textures.maxCount+Gpu::currentFrames.size()),
-                                             LOCAL_SIZE_X, LOCAL_SIZE_Y, static_cast<int>(Gpu::lfInfo.cols), static_cast<int>(Gpu::lfInfo.rows)}; 
-        std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
-        std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
-
-        Buffer uniformBuffer;
-        vk::PushConstantRange pushConstantRange{vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eFragment, 0, Gpu::Uniforms::SIZE};
-
-		std::vector<const char*> validationLayers;
-
-		class
+        class PerFrameData
+        {
+            public:
+                static constexpr int TEXTURE_COUNT{2};
+                PipelineSync drawSync; 
+                std::vector<ComputeSubmitData> computeSubmits{computeShaderPaths.size()};
+                Textures textures{TEXTURE_COUNT};
+                vk::UniqueDescriptorSet generalDescriptorSet; 
+                Buffer uniformBuffer;
+                SwapChainFrame frame;
+                vk::UniqueSampler sampler;
+        };
+        
+        class InFlightFrames
+        {
+            private:
+                unsigned int processedFrame{0};
+            public:
+                const unsigned int COUNT{3};
+                std::vector<PerFrameData> perFrameData{COUNT};
+                PerFrameData& currentFrame() {return perFrameData[processedFrame];}
+                void switchFrame() {processedFrame = (processedFrame+1) % COUNT;}
+        } inFlightFrames;
+		
+        class
 		{
             public:
 			int graphics{-1};
@@ -158,6 +137,46 @@ class GpuVulkan : public Gpu
             Buffer vertex;
             Buffer index;
         } buffers;
+
+        Texture depthImage;
+
+        Textures frameTextures{lfInfo.cols*lfInfo.rows};
+   
+        std::vector<vk::SpecializationMapEntry> specializationEntries;
+        vk::SpecializationInfo specializationInfo;
+
+	    vk::UniqueInstance instance;
+		vk::PhysicalDevice physicalDevice;
+		vk::UniqueDevice device;
+		vk::UniqueSurfaceKHR surface;
+		vk::UniqueSwapchainKHR swapChain;
+        vk::Format swapChainImgFormat;
+	    vk::Extent2D extent;
+        vk::UniqueRenderPass renderPass;
+        vk::UniquePipelineLayout graphicsPipelineLayout;
+        vk::UniquePipeline graphicsPipeline;
+        vk::UniqueCommandPool graphicsCommandPool;
+        vk::UniqueCommandPool computeCommandPool;
+        vk::UniqueDescriptorSetLayout descriptorSetLayout;
+        vk::UniqueDescriptorPool descriptorPool;
+
+
+        std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
+        std::vector<vk::WriteDescriptorSet> writeSets;
+        int textureWriteSetIndex{0};
+        static constexpr int WARP_SIZE{32};
+        static constexpr int LOCAL_SIZE_X{WARP_SIZE/2};
+        static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
+        static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
+
+        std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+Gpu::currentFrames.size()),
+                                             LOCAL_SIZE_X, LOCAL_SIZE_Y, static_cast<int>(Gpu::lfInfo.cols), static_cast<int>(Gpu::lfInfo.rows)}; 
+        std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
+        std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
+
+        vk::PushConstantRange pushConstantRange{vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eFragment, 0, Gpu::Uniforms::SIZE};
+
+		std::vector<const char*> validationLayers;
 
         //TODO encapsulate to general, graphics, compute
         void loadFrameTextures(Resources::ImageGrid images) override;
@@ -201,7 +220,7 @@ class GpuVulkan : public Gpu
         void createDescriptorPool();
         void allocateAndCreateDescriptorSets();
         void createDescriptorSets(vk::DescriptorSet descriptorSet);
-        void createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos);
+        void createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos, Buffer &uniformBuffer, vk::Sampler sampler);
 		bool isDeviceOK(const vk::PhysicalDevice &potDevice);
         uint32_t getMemoryType(uint32_t typeFlags, vk::MemoryPropertyFlags properties);
 
