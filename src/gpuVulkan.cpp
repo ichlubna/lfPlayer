@@ -202,6 +202,11 @@ void GpuVulkan::createSwapChain()
             presentMode = potPm;
             break;
         }
+        else if(potPm == vk::PresentModeKHR::eFifo)
+        {	
+            presentMode = potPm;
+            break;
+        }
         else if(potPm == vk::PresentModeKHR::eImmediate)
             presentMode = potPm;
 
@@ -1194,7 +1199,6 @@ void GpuVulkan::render()
     auto &frameData = inFlightFrames.currentFrame();
     if(device->waitForFences(1, &*frameData.drawSync.fence, VK_FALSE, std::numeric_limits<uint64_t>::max()) != vk::Result::eSuccess)
         throw std::runtime_error("Waiting for fences takes too long");
-    //while (vk::Result::eTimeout == device->waitForFences(1, &*frameData.drawSync.fence, VK_TRUE, std::numeric_limits<uint64_t>::max())){};
     if(device->resetFences(1, &*frameData.drawSync.fence) != vk::Result::eSuccess)
         throw std::runtime_error("Cannot reset fences.");
 
@@ -1225,8 +1229,7 @@ void GpuVulkan::render()
 
     if(queues.graphics.submit(1, &submitInfo, *frameData.drawSync.fence) != vk::Result::eSuccess)
         throw std::runtime_error("Cannot submit draw command buffer.");
-    //device->waitForFences(1, &*frameData.drawSync.fence, VK_TRUE, std::numeric_limits<uint64_t>::max());
-//usleep(10000);
+    
     vk::PresentInfoKHR presentInfo;
     presentInfo .setWaitSemaphoreCount(1)
         .setPWaitSemaphores(&*frameData.drawSync.semaphores.renderReady)
