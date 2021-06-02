@@ -39,7 +39,7 @@ Simulation::Simulation(std::string filename, GpuAPI gpuApi, WindowAPI windowApi)
 		break;
 	}
 
-    //gpu->loadFrameTextures(lightfield);
+    gpu->loadFrameTextures(lightfield);
 }
 
 glm::vec2 Simulation::recalculateSpeed(glm::vec2 position)
@@ -105,10 +105,13 @@ void Simulation::run()
 {
     while(!end)
     {
-        gpu->uniforms.focus += 0.01f;
+        gpu->uniforms.focus += 0.05f;
 
-        auto startTime= std::chrono::high_resolution_clock::now();
+        auto startTime = std::chrono::high_resolution_clock::now();
         processInputs();
+        auto frames = framesFromGrid(glm::ivec2(8,8),camera->position.xy());
+        gpu->updateFrameIndices(frames);
+        
         gpu->render();
         auto endTime= std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> frameTime = endTime-startTime; 

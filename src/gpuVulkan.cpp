@@ -140,7 +140,6 @@ void GpuVulkan::createDevice()
 
     std::vector<const char*> deviceExtensions;
     deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-    deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
     vk::DeviceCreateInfo createInfo;
     createInfo	.setPQueueCreateInfos(queueCreateInfos)
@@ -356,6 +355,9 @@ void GpuVulkan::createDescriptorSetLayout()
         .setDescriptorCount(1)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute);
 
+    //vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsInfo;
+    //flagsInfo.  setBindingCount(1) 
+
     vk::DescriptorSetLayoutBinding imageLayoutBinding;
     imageLayoutBinding.setBinding(bindings.images)
         .setDescriptorType(vk::DescriptorType::eStorageImage)
@@ -366,7 +368,7 @@ void GpuVulkan::createDescriptorSetLayout()
     vk::DescriptorSetLayoutBinding textureLayoutBinding;
     textureLayoutBinding.setBinding(bindings.textures)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(PerFrameData::TEXTURE_COUNT)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);    
     
@@ -459,8 +461,7 @@ void GpuVulkan::createComputePipelines()
             .setSignalSemaphoreCount(1)
             .setPSignalSemaphores(&*(submitData.finishedSemaphore));
         }
-   }
-    
+   }  
 }
 
 void GpuVulkan::createSpecializationInfo()
@@ -793,8 +794,8 @@ void GpuVulkan::allocateAndCreateDescriptorSets()
         for(int i=0; i<Gpu::currentFrames.size(); i++)
         {
             vk::DescriptorImageInfo imageInfo;
-            imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
-                .setImageView(*frameData.textures.images.front().imageView)
+            imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                .setImageView(*frameTextures.images.front().imageView)
                 .setSampler({});
             imageInfos.push_back(imageInfo);
         }
@@ -855,7 +856,7 @@ void GpuVulkan::createDescriptorSets(vk::DescriptorSet descriptorSet, std::vecto
         .setDstBinding(bindings.textures)
         .setDstArrayElement(0)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(PerFrameData::TEXTURE_COUNT)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT)
         .setPImageInfo(imageInfos.data());
     writeSets.push_back(textureWriteSet);
     textureWriteSetIndex = writeSets.size()-1;
@@ -992,7 +993,6 @@ void GpuVulkan::copyBufferToImage(vk::Buffer buffer, vk::Image image, unsigned i
         .setImageSubresource({vk::ImageAspectFlagBits::eColor,0,0,1})
         .setImageOffset({0,0,0})
         .setImageExtent({width, height, 1});
-
     commandBuffer->copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, 1, &region);    
 
     oneTimeCommandsEnd(*commandBuffer);
@@ -1119,29 +1119,31 @@ void GpuVulkan::loadFrameTextures(Resources::ImageGrid images)
     if(images.size() > frameTextures.maxCount)
         throw std::runtime_error("Not enough textures allocated for the input frames.");
         
-    size_t size = images.front().front()->channels * images.front().front()->width * images.front().front()->height;
+    size_t size = images.front().front()->pixels.size();//images.front().front()->channels * images.front().front()->width * images.front().front()->height;
 
     for(unsigned int row=0; row<images.size(); row++)
         for(unsigned int col=0; col<images.front().size(); col++)
         {
             unsigned int linearIndex = images.front().size()*row + col;
-            Buffer stagingBuffer = createBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            auto &image = frameTextures.images[linearIndex].image;
+            Buffer stagingBuffer = createBuffer(image.memorySize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
             void *data;
 
             if(device->mapMemory(*stagingBuffer.memory, 0, size, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
                 throw std::runtime_error("Cannot map memory for image upload.");
             memcpy(data, images[row][col]->pixels.data(), size);
             device->unmapMemory(*stagingBuffer.memory); 
-            transitionImageLayout(*frameTextures.images[linearIndex].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-            copyBufferToImage(*stagingBuffer.buffer, *frameTextures.images[linearIndex].image.textureImage, images[row][col]->width, images[row][col]->height);
-            transitionImageLayout(*frameTextures.images[linearIndex].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+            transitionImageLayout(*image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+            copyBufferToImage(*stagingBuffer.buffer, *image.textureImage, images[row][col]->width, images[row][col]->height);
+            transitionImageLayout(*image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
         }
 }
 
 void GpuVulkan::updateDescriptors()
-{/*
+{
+    auto &frameData = inFlightFrames.currentFrame();
     std::vector<vk::DescriptorImageInfo> imageInfos;
-    for(auto &texture : textures.images)
+    for(auto &texture : frameData.textures.images)
     {
         vk::DescriptorImageInfo imageInfo;
         imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
@@ -1158,14 +1160,14 @@ void GpuVulkan::updateDescriptors()
         imageInfos.push_back(imageInfo);
     }
     vk::WriteDescriptorSet textureWriteSet;
-    textureWriteSet.setDstSet(*generalDescriptorSet)
+    textureWriteSet.setDstSet(*frameData.generalDescriptorSet)
         .setDstBinding(bindings.textures)
         .setDstArrayElement(0)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(textures.maxCount)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT)
         .setPImageInfo(imageInfos.data());
     writeSets[textureWriteSetIndex] = textureWriteSet; 
-   device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, nullptr);*/
+   device->updateDescriptorSets(writeSets.size(), writeSets.data(), 0, nullptr);
 }
 
 vk::UniqueSampler GpuVulkan::createSampler()

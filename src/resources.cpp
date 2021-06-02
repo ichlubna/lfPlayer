@@ -11,10 +11,10 @@
 std::shared_ptr<Resources::Image> Resources::loadImage(std::string path)
 {
     auto image = std::make_shared<Image>();
-    stbi_uc* pixels = stbi_load(path.c_str(), &(image->width), &image->height, &image->channels, STBI_rgb);
+    stbi_uc* pixels = stbi_load(path.c_str(), &(image->width), &image->height, &image->channels, STBI_rgb_alpha);
     if(pixels == nullptr)
         throw std::runtime_error("Cannot load image "+path);
-    image->pixels.resize(image->width*image->height*image->channels);
+    image->pixels.resize(image->width*image->height*4);
     memcpy(image->pixels.data(), pixels, image->pixels.size());
     stbi_image_free(pixels);
     return image;

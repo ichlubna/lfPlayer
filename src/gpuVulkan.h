@@ -95,6 +95,7 @@ class GpuVulkan : public Gpu
         {
             public:
                 static constexpr int TEXTURE_COUNT{2};
+                static constexpr int LF_FRAMES_COUNT{4};
                 PipelineSync drawSync; 
                 std::vector<ComputeSubmitData> computeSubmits{computeShaderPaths.size()};
                 Textures textures{TEXTURE_COUNT};
@@ -169,7 +170,7 @@ class GpuVulkan : public Gpu
         static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
         static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
 
-        std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+Gpu::currentFrames.size()),
+        std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT),
                                              LOCAL_SIZE_X, LOCAL_SIZE_Y, static_cast<int>(Gpu::lfInfo.cols), static_cast<int>(Gpu::lfInfo.rows)}; 
         std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
         std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
