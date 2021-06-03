@@ -42,9 +42,9 @@ Simulation::Simulation(std::string filename, GpuAPI gpuApi, WindowAPI windowApi)
     gpu->loadFrameTextures(lightfield);
 }
 
-glm::vec2 Simulation::recalculateSpeed(glm::vec2 position)
+glm::vec2 Simulation::recalculateSpeedMultiplier(glm::vec2 position)
 {
-    glm::vec2 base{position.xy()-0.5f};
+    glm::vec2 base{position.xy()};
     return glm::vec2{-4.0f*(base*base)+1.0f};
 }
 
@@ -77,17 +77,17 @@ void Simulation::processInputs()
 
     if(inputs->pressedAny())
     {
-        glm::vec2 speed = recalculateSpeed(camera->position.xy());
+        glm::vec2 speed = cameraSpeed*recalculateSpeedMultiplier(camera->position.xy());
         if(inputs->pressed(Inputs::W))
-            camera->move(Camera::Direction::UP, speed.y); 
+        {    camera->move(Camera::Direction::UP, speed.y);}
         if(inputs->pressed(Inputs::S))
             camera->move(Camera::Direction::DOWN, speed.y); 
         if(inputs->pressed(Inputs::A))
-            camera->move(Camera::Direction::LEFT, speed.x);
+            camera->move(Camera::Direction::BACK, speed.x);
         if(inputs->pressed(Inputs::D))
-            camera->move(Camera::Direction::RIGHT, speed.x);
-        constexpr float delta{0.00001f};
-        camera->clampPosition(glm::vec2(0.0f+delta, 1.0f-delta));
+            camera->move(Camera::Direction::FRONT, speed.x);
+        constexpr float delta{0.0001f};
+        camera->clampPosition(glm::vec2(cameraBounds.x+delta, cameraBounds.y-delta));
 
         if(inputs->pressedAfterRelease(Inputs::Z))
             gpu->uniforms.switchView ^= 1;
@@ -109,8 +109,10 @@ void Simulation::run()
 
         auto startTime = std::chrono::high_resolution_clock::now();
         processInputs();
+        //TODO 8x8 according to input
         auto frames = framesFromGrid(glm::ivec2(8,8),camera->position.xy());
-        gpu->updateFrameIndices(frames);
+        std::cerr <<camera->position.x<< " " << camera->position.y<< " " << frames.front().index << " " << frames.front().weight << std::endl;
+        //gpu->updateFrameIndices(frames);
         
         gpu->render();
         auto endTime= std::chrono::high_resolution_clock::now();

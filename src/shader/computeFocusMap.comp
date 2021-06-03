@@ -11,6 +11,6 @@ void main()
     const ivec2 outCoords = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
     const vec2 uv = vec2(outCoords)/vec2(1920,1080);
     float test = (outCoords.x>960+uniforms.focus) ? 1.0 : 0.5;
-    vec4 color = texture(sampler2D(textures[5], textSampler), uv);
+    vec4 color = texture(sampler2D(textures[2], textSampler), uv);
     imageStore(images[0], outCoords, color);
 }

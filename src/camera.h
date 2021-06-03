@@ -10,7 +10,7 @@ class Camera
         void move(Direction direction, float amount);
         void turn(float pitch, float yaw);
 
-        glm::vec3 position{0.0f,0.0f,5.0f};
+        glm::vec3 position{0.0f,0.0f,0.0f};
         //TODO quaternion
         float yaw{0}, pitch{0};
         float fov{glm::radians(45.0f)};

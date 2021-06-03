@@ -40,7 +40,7 @@ void Camera::move(Direction direction, float amount)
 
 void Camera::clampPosition(glm::vec2 range)
 {
-    position.xy() = glm::clamp(position.xy(), range.x, range.y);
+    position = glm::clamp(position, range.x, range.y);
 }
 
 void Camera::turn(float p, float y)
@@ -57,7 +57,7 @@ glm::mat4 Camera::getViewProjectionMatrix()
 }
 
 void Camera::update()
-    {
+{
     front.x = cos(yaw) * cos(pitch);
 	front.y = sin(pitch);
 	front.z = sin(yaw) * cos(pitch);

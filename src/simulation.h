@@ -21,7 +21,8 @@ class Simulation
         double previousX{0.0};
         double previousY{0.0};
         Inputs *inputs;
-        float cameraSpeed{0.05};
-        glm::vec2 recalculateSpeed(glm::vec2 position);
+        float cameraSpeed{0.007};
+        glm::vec2 cameraBounds{-0.5,0.5};
+        glm::vec2 recalculateSpeedMultiplier(glm::vec2 position);
         std::vector<Gpu::LfCurrentFrame> framesFromGrid(glm::uvec2 gridSize, glm::vec2 position);
 };

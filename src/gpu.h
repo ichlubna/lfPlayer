@@ -44,7 +44,7 @@ class Gpu
             public:
             unsigned int index{0};
             float weight{0};
-            bool changed{false};
+            bool changed{true};
         };
 
         virtual void loadFrameTextures(Resources::ImageGrid images) = 0;

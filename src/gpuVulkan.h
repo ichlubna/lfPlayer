@@ -15,6 +15,11 @@ class GpuVulkan : public Gpu
         std::string fragmentShaderPath{"../precompiled/fragment.spv"};
         inline static const std::vector<std::string> computeShaderPaths{"../precompiled/computeFocusMap.spv", "../precompiled/computeLightfield.spv"};
 
+        std::vector<const char*> instanceExtensions = {"VK_KHR_surface",
+                                                        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME};
+        std::vector<const char*> deviceExtensions{  VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                                                    VK_KHR_MAINTENANCE3_EXTENSION_NAME,
+                                                    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME};
         const class
         {
             public:
@@ -90,6 +95,15 @@ class GpuVulkan : public Gpu
                 vk::UniqueCommandBuffer commandBuffer;
                 vk::SubmitInfo submitInfo;
         };
+        
+        class DescriptorWrite
+        {
+            public: 
+                vk::DescriptorBufferInfo bufferInfo;
+                vk::DescriptorImageInfo samplerInfo;
+                std::vector<vk::DescriptorImageInfo> imageInfos;
+                std::vector<vk::WriteDescriptorSet> writeSets;
+        };
 
         class PerFrameData
         {
@@ -103,6 +117,7 @@ class GpuVulkan : public Gpu
                 Buffer uniformBuffer;
                 SwapChainFrame frame;
                 vk::UniqueSampler sampler;
+                DescriptorWrite descriptorWrite;
         };
         
         class InFlightFrames
@@ -114,8 +129,8 @@ class GpuVulkan : public Gpu
                 std::vector<PerFrameData> perFrameData{COUNT};
                 PerFrameData& currentFrame() {return perFrameData[processedFrame];}
                 void switchFrame() {processedFrame = (processedFrame+1) % COUNT;}
-        } inFlightFrames;
-		
+        } inFlightFrames;		
+
         class
 		{
             public:
@@ -163,7 +178,6 @@ class GpuVulkan : public Gpu
 
 
         std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
-        std::vector<vk::WriteDescriptorSet> writeSets;
         int textureWriteSetIndex{0};
         static constexpr int WARP_SIZE{32};
         static constexpr int LOCAL_SIZE_X{WARP_SIZE/2};
@@ -221,7 +235,7 @@ class GpuVulkan : public Gpu
         void createDescriptorPool();
         void allocateAndCreateDescriptorSets();
         void createDescriptorSets(vk::DescriptorSet descriptorSet);
-        void createDescriptorSets(vk::DescriptorSet descriptorSet, std::vector<vk::DescriptorImageInfo> &imageInfos, Buffer &uniformBuffer, vk::Sampler sampler);
+        void createDescriptorSets(PerFrameData &frameData);
 		bool isDeviceOK(const vk::PhysicalDevice &potDevice);
         uint32_t getMemoryType(uint32_t typeFlags, vk::MemoryPropertyFlags properties);
 
