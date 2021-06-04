@@ -9,8 +9,10 @@ float colorDistance(vec3 a, vec3 b)
 void main()
 {
     const ivec2 outCoords = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-    const vec2 uv = vec2(outCoords)/vec2(1920,1080);
-    float test = (outCoords.x>960+uniforms.focus) ? 1.0 : 0.5;
-    vec4 color = texture(sampler2D(textures[2], textSampler), uv);
+    const vec2 uv = vec2(outCoords)/vec2(WIDTH,HEIGHT);
+    vec4 color = vec4(0.0f);
+    for(int i=0; i<4; i++) 
+        color += uniforms.lfWeights[i]*texture(sampler2D(textures[2+i], textSampler), uv);
+    color.w = 1.0f;
     imageStore(images[0], outCoords, color);
 }

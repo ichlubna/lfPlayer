@@ -21,12 +21,12 @@ class Gpu
 
             const Data* getData() {return &data;};
 
-            float &focus{reinterpret_cast<float&>(data[0])};
-            int &switchView{data[1]};
-            std::array<float*, 4> lfWeights{    reinterpret_cast<float*>(&data[2]),
-                                                reinterpret_cast<float*>(&data[3]),
-                                                reinterpret_cast<float*>(&data[4]),
-                                                reinterpret_cast<float*>(&data[5])};
+            float &focus{reinterpret_cast<float&>(data[4])};
+            int &switchView{data[5]};
+            std::array<float*, 4> lfWeights{    reinterpret_cast<float*>(&data[0]),
+                                                reinterpret_cast<float*>(&data[1]),
+                                                reinterpret_cast<float*>(&data[2]),
+                                                reinterpret_cast<float*>(&data[3])};
 
         } uniforms; 
 

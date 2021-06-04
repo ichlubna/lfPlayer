@@ -740,9 +740,6 @@ void GpuVulkan::createBuffers()
 void GpuVulkan::updateUniforms()
 {
     auto &frameData = inFlightFrames.currentFrame();
-    for(size_t i=0; i<Gpu::currentFrames.size(); i++)
-        *Gpu::uniforms.lfWeights[i] = Gpu::currentFrames[i].weight;
-
     void *data;
     if(device->mapMemory(*frameData.uniformBuffer.memory, 0, Gpu::uniforms.SIZE, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
         throw std::runtime_error("Cannot map memory for uniforms update.");
@@ -1206,12 +1203,7 @@ void GpuVulkan::render()
     }
 
     updateUniforms();
-    for(const auto &frame : Gpu::currentFrames)
-        if(frame.changed)
-        {
-            updateDescriptors();
-            break;
-        }
+    updateDescriptors();
 
     for(auto const &computeSubmit : frameData.computeSubmits)
         if(queues.compute.submit(1, &(computeSubmit.submitInfo), nullptr) != vk::Result::eSuccess)

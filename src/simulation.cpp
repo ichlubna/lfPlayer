@@ -21,13 +21,10 @@ Simulation::Simulation(std::string filename, GpuAPI gpuApi, WindowAPI windowApi)
 
     //if(std::filesystem::is_directory(filename))
     auto lightfield = Resources::loadLightfield(filename);
-    Gpu::LfInfo lfInfo;
     lfInfo.width = lightfield.front().front()->width;
     lfInfo.height = lightfield.front().front()->height;
     lfInfo.rows = lightfield.size();
     lfInfo.cols = lightfield.front().size();
-
-    //Gpu::LfInfo lfInfo;
 	switch(gpuApi)
 	{
 		case GPU_VULKAN:
@@ -44,23 +41,37 @@ Simulation::Simulation(std::string filename, GpuAPI gpuApi, WindowAPI windowApi)
 
 glm::vec2 Simulation::recalculateSpeedMultiplier(glm::vec2 position)
 {
-    glm::vec2 base{position.xy()};
+    glm::vec2 base{position.xy()-0.5f};
     return glm::vec2{-4.0f*(base*base)+1.0f};
 }
 
 std::vector<Gpu::LfCurrentFrame> Simulation::framesFromGrid(glm::uvec2 gridSize, glm::vec2 position)
 {
     std::vector<Gpu::LfCurrentFrame> frames;
-    glm::vec2 gridPosition{glm::vec2(gridSize)*position};
+    glm::vec2 gridPosition{glm::vec2(gridSize-1u)*position};
     glm::ivec4 coords{glm::floor(gridPosition), glm::ceil(gridPosition)};
-    for (const auto& x : {coords.x, coords.z}) 
-        for (const auto& y: {coords.y, coords.w})
-        { 
-            unsigned int linearIndex = gridSize.x*y + x;
-            float weight = 1.0f-glm::distance(glm::vec2(x,y), gridPosition);
-            frames.push_back({linearIndex, weight});
-        }
-   return frames; 
+    
+    unsigned int linearIndex(0);
+    float weight{0};
+    glm::vec2 unitPos{glm::fract(position)};
+
+    linearIndex = gridSize.x*coords.y + coords.x;
+    weight = (1-unitPos.x)*(1-unitPos.y);
+    frames.push_back({linearIndex, weight});
+    
+    linearIndex = gridSize.x*coords.y + coords.z;
+    weight = unitPos.x*(1-unitPos.y);
+    frames.push_back({linearIndex, weight});
+
+    linearIndex = gridSize.x*coords.w + coords.x;
+    weight = (1-unitPos.x)*unitPos.y;
+    frames.push_back({linearIndex, weight});
+    
+    linearIndex = gridSize.x*coords.w + coords.z;
+    weight = unitPos.x*unitPos.y;
+    frames.push_back({linearIndex, weight});
+
+    return frames; 
 }
 
 void Simulation::processInputs()
@@ -109,10 +120,8 @@ void Simulation::run()
 
         auto startTime = std::chrono::high_resolution_clock::now();
         processInputs();
-        //TODO 8x8 according to input
-        auto frames = framesFromGrid(glm::ivec2(8,8),camera->position.xy());
-        std::cerr <<camera->position.x<< " " << camera->position.y<< " " << frames.front().index << " " << frames.front().weight << std::endl;
-        //gpu->updateFrameIndices(frames);
+        auto frames = framesFromGrid(glm::ivec2(lfInfo.cols, lfInfo.rows),camera->position.xy());
+        gpu->updateFrameIndices(frames);
         
         gpu->render();
         auto endTime= std::chrono::high_resolution_clock::now();

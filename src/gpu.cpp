@@ -6,5 +6,6 @@ void Gpu::updateFrameIndices(std::vector<LfCurrentFrame> &frames)
     {
         bool changed = currentFrames[i].index != frames[i].index;
         currentFrames[i] = {frames[i].index, frames[i].weight, changed}; 
+        *uniforms.lfWeights[i] = frames[i].weight;
     }
 }

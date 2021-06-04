@@ -1,11 +1,13 @@
 layout(constant_id = 0) const int MAX_TEXTURES = 64;
 layout(constant_id = 3) const int ROWS = 8;
 layout(constant_id = 4) const int COLS = 8;
+layout(constant_id = 5) const int WIDTH = 1920;
+layout(constant_id = 6) const int HEIGHT = 1080;
 layout(set = 0, binding = 0) uniform uniformBuffer
 {
+    vec4 lfWeights;
     float focus;
     int switchView;
-    float lfWeights[4];
 } uniforms;
 layout(set = 0, binding = 1) uniform sampler textSampler;
 layout(set = 0, binding = 2, rgba8) uniform image2D images[MAX_TEXTURES];
