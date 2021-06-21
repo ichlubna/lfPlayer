@@ -61,12 +61,13 @@ class GpuVulkan : public Gpu
             public:
             Image image;
             vk::UniqueImageView imageView;
+            vk::Format format{vk::Format::eR8G8B8A8Unorm};
         };
 
         class SwapChainFrame
         {
             public:
-            vk::Image image;
+            vk::UniqueImage image;
             vk::UniqueImageView imageView;
             vk::UniqueFramebuffer frameBuffer;
             vk::UniqueCommandBuffer commandBuffer;
@@ -196,7 +197,7 @@ class GpuVulkan : public Gpu
 		std::vector<const char*> validationLayers;
 
         //TODO encapsulate to general, graphics, compute
-        void loadFrameTextures(Resources::ImageGrid images) override;
+        void loadFrameTextures(Resources::ImageGrid &images) override;
         std::vector<char> loadShader(const char* path);
         vk::UniqueShaderModule createShaderModule(std::vector<char> source);
         void updateDescriptors();
@@ -217,7 +218,7 @@ class GpuVulkan : public Gpu
         void createComputeCommandBuffers();
         GpuVulkan::Buffer createBuffer(size_t size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties);
         void createBuffers();
-        vk::Format getSupportedFormat(const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features);
+        vk::Format getSupportedFormat(const std::vector<vk::Format> &candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features);
         vk::Format getDepthFormat();
         void createDepthImage();
         vk::UniqueCommandBuffer oneTimeCommandsStart();
@@ -240,5 +241,4 @@ class GpuVulkan : public Gpu
         void createDescriptorSets(PerFrameData &frameData);
 		bool isDeviceOK(const vk::PhysicalDevice &potDevice);
         uint32_t getMemoryType(uint32_t typeFlags, vk::MemoryPropertyFlags properties);
-
 };

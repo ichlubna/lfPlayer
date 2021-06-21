@@ -1,18 +1,90 @@
 #version 450
 #include "computeHeader.glsl"
+vec2 PX_SIZE = 1.0f/ivec2(WIDTH, HEIGHT);
+vec2 HALF_PX_SIZE = PX_SIZE/2;
 
-float colorDistance(vec3 a, vec3 b)
+//discards the 4th attribute
+float colorDistance(vec4 a, vec4 b)
 {
     return max(max(abs(a.r-b.r), abs(a.g-b.g)), abs(a.b-b.b)); //Chebyshev
 }
 
+vec4 sampleImage(ivec2 coord, int textID)
+{
+    const vec2 uv = normalizeCoord(coord);
+    vec4 color = texture(sampler2D(textures[textID+2], textSampler), uv);
+/*color += texture(sampler2D(textures[textID+2], textSampler),uv+PX_SIZE);
+color += texture(sampler2D(textures[textID+2], textSampler),uv-PX_SIZE);
+color += texture(sampler2D(textures[textID+2], textSampler),uv+vec2(1, -1)*PX_SIZE);
+color += texture(sampler2D(textures[textID+2], textSampler),uv+vec2(-1, 1)*PX_SIZE);
+color += texture(sampler2D(textures[textID+2], textSampler),uv+vec2(0,1)*PX_SIZE);
+color += texture(sampler2D(textures[textID+2], textSampler),uv-vec2(0,1)*PX_SIZE);
+color += texture(sampler2D(textures[textID+2], textSampler),uv+vec2(1, 0)*PX_SIZE);
+color += texture(sampler2D(textures[textID+2], textSampler),uv-vec2(1, 0)*PX_SIZE);
+color /= 9.0;*/
+    for(int i=0; i<4; i++)
+        color += texture(sampler2D(textures[textID+2], textSampler), uv+(vec2(1.0f,1.01f)-2*vec2(i/2, i%2))*HALF_PX_SIZE);
+    color /= 5.0f;*/
+    color.w = 1.0f;
+    return color;
+}
+
+struct Welford
+{
+    vec4 mean;
+    float m2;
+    int n;
+};
+    Welford welford = Welford(vec4(0),0,0);
+void addWelford(vec4 color)
+{
+    welford.n++;
+    vec4 delta = color-welford.mean;
+    float dist = colorDistance(color, welford.mean);
+    welford.mean += delta/welford.n;
+    welford.m2 = dist*colorDistance(color, welford.mean);
+}
+float finishWelford()
+{
+    float result = welford.m2; // /welford.n
+    welford.mean = vec4(0);
+    welford.m2 = 0;
+    welford.n = 0;
+    return result; 
+}
+
 void main()
 {
-    const ivec2 outCoords = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-    const vec2 uv = vec2(outCoords)/vec2(WIDTH,HEIGHT);
-    vec4 color = vec4(0.0f);
-    for(int i=0; i<4; i++) 
-        color += uniforms.lfWeights[i]*texture(sampler2D(textures[2+i], textSampler), uv);
-    color.w = 1.0f;
-    imageStore(images[0], outCoords, color);
+    const ivec2 outCoord = ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThan(outCoord,ivec2(WIDTH,HEIGHT))))
+        return;
+    
+    float minVariance = 999.0f;
+    int minSample = 0;
+    for(int i=0; i<SAMPLE_COUNT; i++)
+    { 
+        for(int j=0; j<4; j++)
+        {
+            ivec2 coord = outCoord + ivec2(round(lfFrameOffset(j)*getPxFocus(i)));
+            vec4 color = sampleImage(coord, j);
+            addWelford(color);
+        }
+        float variance = finishWelford();
+        if(variance < minVariance)
+        {
+            minVariance = variance;
+            minSample = i;
+        }
+     }
+
+/*        vec4 cc = vec4(0);
+for(int i=0; i<4; i++)
+cc+=sampleImage(outCoord + ivec2(round(lfFrameOffset(i)*uniforms.focus)), i);
+cc /= 4;
+
+vec4 c = vec4(float(minSample)/SAMPLE_COUNT);
+c=cc;
+imageStore(images[OUTPUT_TEXTURE_ID], outCoord,c);*/
+
+        imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(float(minSample)/SAMPLE_COUNT));
 }

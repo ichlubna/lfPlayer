@@ -9,7 +9,7 @@ layout(location = 0) out vec4 outColor;
 void main()
 {
     if(uniforms.switchView == 0)
-        outColor = texture(sampler2D(textures[0], textSampler),uv);
+        outColor = texture(sampler2D(textures[OUTPUT_TEXTURE_ID], textSampler),uv);
     else
-        outColor = texture(sampler2D(textures[1], textSampler),uv);
+        outColor = vec4(texture(sampler2D(textures[FOCUSMAP_TEXTURE_ID], textSampler),uv).r);
 }

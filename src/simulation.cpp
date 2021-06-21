@@ -49,28 +49,38 @@ std::vector<Gpu::LfCurrentFrame> Simulation::framesFromGrid(glm::uvec2 gridSize,
 {
     std::vector<Gpu::LfCurrentFrame> frames;
     glm::vec2 gridPosition{glm::vec2(gridSize-1u)*position};
-    glm::ivec4 coords{glm::floor(gridPosition), glm::ceil(gridPosition)};
+    glm::ivec2 downCoords{glm::floor(gridPosition)};
+    glm::ivec2 upCoords{glm::ceil(gridPosition)};
     
     unsigned int linearIndex(0);
     float weight{0};
+    glm::vec2 offset{0,0};
+    glm::ivec2 currentCoords{0,0};
     glm::vec2 unitPos{glm::fract(position)};
 
-    linearIndex = gridSize.x*coords.y + coords.x;
+    currentCoords = {downCoords}; 
+    linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
     weight = (1-unitPos.x)*(1-unitPos.y);
-    frames.push_back({linearIndex, weight});
-    
-    linearIndex = gridSize.x*coords.y + coords.z;
+    offset = gridPosition-glm::vec2(currentCoords);
+    frames.push_back({linearIndex, weight, offset});
+   
+    currentCoords = {upCoords.x, downCoords.y}; 
+    linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
     weight = unitPos.x*(1-unitPos.y);
-    frames.push_back({linearIndex, weight});
+    offset = gridPosition-glm::vec2(currentCoords);
+    frames.push_back({linearIndex, weight, offset});
 
-    linearIndex = gridSize.x*coords.w + coords.x;
+    currentCoords = {downCoords.x, upCoords.y}; 
+    linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
     weight = (1-unitPos.x)*unitPos.y;
-    frames.push_back({linearIndex, weight});
+    offset = gridPosition-glm::vec2(currentCoords);
+    frames.push_back({linearIndex, weight, offset});
     
-    linearIndex = gridSize.x*coords.w + coords.z;
+    currentCoords = {upCoords}; 
+    linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
     weight = unitPos.x*unitPos.y;
-    frames.push_back({linearIndex, weight});
-
+    offset = gridPosition-glm::vec2(currentCoords);
+    frames.push_back({linearIndex, weight, offset});
     return frames; 
 }
 
@@ -97,11 +107,15 @@ void Simulation::processInputs()
             camera->move(Camera::Direction::BACK, speed.x);
         if(inputs->pressed(Inputs::D))
             camera->move(Camera::Direction::FRONT, speed.x);
+
+        if(inputs->pressed(Inputs::LMB))
+            *gpu->uniforms.focus -= 0.05f;
+        if(inputs->pressed(Inputs::RMB))
+            *gpu->uniforms.focus += 0.05f;
+        
         constexpr float delta{0.0001f};
         camera->clampPosition(glm::vec2(cameraBounds.x+delta, cameraBounds.y-delta));
 
-        if(inputs->pressedAfterRelease(Inputs::Z))
-            gpu->uniforms.switchView ^= 1;
         if(inputs->pressed(Inputs::Key::ESC))
             end = true;
         if(inputs->pressed(Inputs::ALT, Inputs::ENTER))
@@ -110,19 +124,21 @@ void Simulation::processInputs()
         if(inputs->close)
             end = true;
     }
+        //TODO not sure why misbehaving in the pressedAny if
+        if(inputs->pressedAfterRelease(Inputs::Z))
+            *gpu->uniforms.switchView ^= 1;
 }
 //#include <iostream>
 void Simulation::run() 
 {
+        *gpu->uniforms.focus = 0.0f;
     while(!end)
     {
-        gpu->uniforms.focus += 0.05f;
-
         auto startTime = std::chrono::high_resolution_clock::now();
         processInputs();
         auto frames = framesFromGrid(glm::ivec2(lfInfo.cols, lfInfo.rows),camera->position.xy());
         gpu->updateFrameIndices(frames);
-        
+
         gpu->render();
         auto endTime= std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> frameTime = endTime-startTime; 

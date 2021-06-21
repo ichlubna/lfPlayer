@@ -249,13 +249,13 @@ void GpuVulkan::createSwapChain()
         throw std::runtime_error("Failed to create swap chain.");
     std::vector<vk::Image> swapChainImages = device->getSwapchainImagesKHR(*swapChain);
     for(size_t i=0; i<swapChainImages.size(); i++)
-        inFlightFrames.perFrameData[i].frame.image = swapChainImages[i];
+        *inFlightFrames.perFrameData[i].frame.image = swapChainImages[i];
 }
 
 void GpuVulkan::createSwapChainImageViews()
 {
     for(auto &frameData : inFlightFrames.perFrameData)
-        frameData.frame.imageView = createImageView(frameData.frame.image, swapChainImgFormat, vk::ImageAspectFlagBits::eColor);
+        frameData.frame.imageView = createImageView(*frameData.frame.image, swapChainImgFormat, vk::ImageAspectFlagBits::eColor);
 }
 
 std::vector<char> GpuVulkan::loadShader(const char *path)
@@ -409,7 +409,7 @@ void GpuVulkan::createComputeCommandBuffers()
             submitData.commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipeline));
             submitData.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipelineLayout), 0, 1, &*frameData.generalDescriptorSet, 0, {});
             //pipeline->commandBuffer->pushConstants(*pipeline->pipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
-            submitData.commandBuffer->dispatch(Gpu::lfInfo.width/LOCAL_SIZE_X, Gpu::lfInfo.height/LOCAL_SIZE_Y,1); 
+            submitData.commandBuffer->dispatch(glm::ceil(Gpu::lfInfo.width/static_cast<float>(LOCAL_SIZE_X)), glm::ceil(Gpu::lfInfo.height/static_cast<float>(LOCAL_SIZE_Y)),1); 
             submitData.commandBuffer->end();
         }
     }
@@ -1073,12 +1073,11 @@ vk::UniqueImageView GpuVulkan::createImageView(vk::Image image, vk::Format forma
 
 void GpuVulkan::allocateTextureResources(Textures &textures, vk::ImageUsageFlags usageFlags=vk::ImageUsageFlagBits())
 {
-    for(unsigned int i=0; i<textures.maxCount; i++)
+    for(auto &texture : textures.images)
     {
         vk::ImageUsageFlags usage{vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled | usageFlags};
-        textures.images.emplace_back();
-        textures.images.back().image = createImage(Gpu::lfInfo.width, Gpu::lfInfo.height, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, usage, vk::MemoryPropertyFlagBits::eDeviceLocal);
-        textures.images.back().imageView = createImageView(*textures.images[i].image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
+        texture.image = createImage(Gpu::lfInfo.width, Gpu::lfInfo.height, texture.format, vk::ImageTiling::eOptimal, usage, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        texture.imageView = createImageView(*texture.image.textureImage, texture.format, vk::ImageAspectFlagBits::eColor);
     }
 }
 
@@ -1086,29 +1085,34 @@ void GpuVulkan::allocateTextures()
 {
     for(auto &frameData : inFlightFrames.perFrameData)
     {
+        for(size_t i=0; i<frameData.textures.maxCount; i++)
+            frameData.textures.images.emplace_back();
+        frameData.textures.images.back().format = vk::Format::eR8Unorm;
+        
         allocateTextureResources(frameData.textures, vk::ImageUsageFlagBits::eStorage);
         frameData.sampler = createSampler();
     }
+    for(size_t i=0; i<frameTextures.maxCount; i++)
+        frameTextures.images.emplace_back();
     allocateTextureResources(frameTextures);
 }
 
 void GpuVulkan::setTexturesLayouts()
-{  
-     
+{       
     for(auto &frameData : inFlightFrames.perFrameData)
         for(auto &texture : frameData.textures.images)
         {
-            transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-            transitionImageLayout(*texture.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral);//eShaderReadOnlyOptimal);
+            transitionImageLayout(*texture.image.textureImage, texture.format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+            transitionImageLayout(*texture.image.textureImage, texture.format, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral);
         }
 }
 
-void GpuVulkan::loadFrameTextures(Resources::ImageGrid images)
+void GpuVulkan::loadFrameTextures(Resources::ImageGrid &images)
 {
     if(images.size() > frameTextures.maxCount)
         throw std::runtime_error("Not enough textures allocated for the input frames.");
         
-    size_t size = images.front().front()->pixels.size();//images.front().front()->channels * images.front().front()->width * images.front().front()->height;
+    size_t size = images.front().front()->pixels.size();
 
     for(unsigned int row=0; row<images.size(); row++)
         for(unsigned int col=0; col<images.front().size(); col++)
@@ -1117,7 +1121,6 @@ void GpuVulkan::loadFrameTextures(Resources::ImageGrid images)
             auto &image = frameTextures.images[linearIndex].image;
             Buffer stagingBuffer = createBuffer(image.memorySize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
             void *data;
-
             if(device->mapMemory(*stagingBuffer.memory, 0, size, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
                 throw std::runtime_error("Cannot map memory for image upload.");
             memcpy(data, images[row][col]->pixels.data(), size);
@@ -1201,10 +1204,9 @@ void GpuVulkan::render()
         recreateSwapChain();
         return;
     }
-
     updateUniforms();
     updateDescriptors();
-
+    
     for(auto const &computeSubmit : frameData.computeSubmits)
         if(queues.compute.submit(1, &(computeSubmit.submitInfo), nullptr) != vk::Result::eSuccess)
             throw std::runtime_error("Cannot submit compute command buffer.");
@@ -1237,6 +1239,7 @@ void GpuVulkan::render()
         return;
     }
 
+    //device->waitIdle();
     inFlightFrames.switchFrame();
 }
 

@@ -12,21 +12,31 @@ class Gpu
         class Uniforms
         {   
             private:
-            static constexpr size_t UNIFORM_COUNT{6};
+            static constexpr size_t LF_ATTRIBS{16};
+            static constexpr size_t STANDALONE_COUNT{2};
+            static constexpr size_t UNIFORM_COUNT{LF_ATTRIBS*3+STANDALONE_COUNT};
             using Data = std::array<int32_t, UNIFORM_COUNT>; 
+           
+            size_t index{0}; 
+            float* mapFloat(){return reinterpret_cast<float*>(&data[index++]);}
+            int* mapInt(){return &data[index++];}
             Data data{};
 
             public:
             static constexpr size_t SIZE{UNIFORM_COUNT*sizeof(int32_t)};
-
             const Data* getData() {return &data;};
-
-            float &focus{reinterpret_cast<float&>(data[4])};
-            int &switchView{data[5]};
-            std::array<float*, 4> lfWeights{    reinterpret_cast<float*>(&data[0]),
-                                                reinterpret_cast<float*>(&data[1]),
-                                                reinterpret_cast<float*>(&data[2]),
-                                                reinterpret_cast<float*>(&data[3])};
+            
+            float *focus;
+            int *switchView;
+            std::array<float*, LF_ATTRIBS> lfAttribs;
+            
+            Uniforms()
+            {
+                for(auto &attrib : lfAttribs) 
+                    attrib = mapFloat();
+                focus = mapFloat();
+                switchView = mapInt();
+            };
 
         } uniforms; 
 
@@ -44,10 +54,11 @@ class Gpu
             public:
             unsigned int index{0};
             float weight{0};
+            glm::vec2 offset;
             bool changed{true};
         };
 
-        virtual void loadFrameTextures(Resources::ImageGrid images) = 0;
+        virtual void loadFrameTextures(Resources::ImageGrid &images) = 0;
         void updateFrameIndices(std::vector<LfCurrentFrame> &frames);
 		virtual void render() = 0;
 		Gpu(Window *w, LfInfo lf) : windowPtr{w}, lfInfo{lf}{};
