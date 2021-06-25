@@ -8,11 +8,11 @@ void main()
     const vec2 outUV = normalizeCoord(outCoord);
 
     int minSample = int(round(SAMPLE_COUNT*texture(sampler2D(textures[FOCUSMAP_TEXTURE_ID], textSampler), outUV).r));
+    minSample = int(uniforms.focus);
     vec4 color = vec4(0);
     for(int j=0; j<4; j++)
     {
         ivec2 coord = outCoord + ivec2(round(lfFrameOffset(j)*getPxFocus(minSample)));
-        //color += imageLoad(images[FOCUSMAP_TEXTURE_ID], coord);
         color += texture(sampler2D(textures[2+j], textSampler), normalizeCoord(coord));
     }
     color /= 4;

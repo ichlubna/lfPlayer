@@ -3,52 +3,56 @@
 vec2 PX_SIZE = 1.0f/ivec2(WIDTH, HEIGHT);
 vec2 HALF_PX_SIZE = PX_SIZE/2;
 
+float colorToGrayscale(vec4 c)
+{
+    return c.r*0.299 + c.g*0.587 + c.b*0.114;
+}
+
 //discards the 4th attribute
 float colorDistance(vec4 a, vec4 b)
 {
     return max(max(abs(a.r-b.r), abs(a.g-b.g)), abs(a.b-b.b)); //Chebyshev
+    //return max(max(abs(a.r-b.r), abs(a.g-b.g)), abs(a.b-b.b)); //Chebyshev
 }
 
-vec4 sampleImage(ivec2 coord, int textID)
+vec4 blockDistance(mat4 a, mat4 b)
+{
+    vec4 distances = vec4(0);
+    for(int i=0; i<4; i++)
+        distances[i] = colorDistance(a[i], b[i]);
+    return distances;
+}
+
+mat4 sampleImage(ivec2 coord, int textID)
 {
     const vec2 uv = normalizeCoord(coord);
-    vec4 color = texture(sampler2D(textures[textID+2], textSampler), uv);
-/*color += texture(sampler2D(textures[textID+2], textSampler),uv+PX_SIZE);
-color += texture(sampler2D(textures[textID+2], textSampler),uv-PX_SIZE);
-color += texture(sampler2D(textures[textID+2], textSampler),uv+vec2(1, -1)*PX_SIZE);
-color += texture(sampler2D(textures[textID+2], textSampler),uv+vec2(-1, 1)*PX_SIZE);
-color += texture(sampler2D(textures[textID+2], textSampler),uv+vec2(0,1)*PX_SIZE);
-color += texture(sampler2D(textures[textID+2], textSampler),uv-vec2(0,1)*PX_SIZE);
-color += texture(sampler2D(textures[textID+2], textSampler),uv+vec2(1, 0)*PX_SIZE);
-color += texture(sampler2D(textures[textID+2], textSampler),uv-vec2(1, 0)*PX_SIZE);
-color /= 9.0;*/
+    vec4 c = texture(sampler2D(textures[textID+2], textSampler), uv);
+    mat4 block;
     for(int i=0; i<4; i++)
-        color += texture(sampler2D(textures[textID+2], textSampler), uv+(vec2(1.0f,1.01f)-2*vec2(i/2, i%2))*HALF_PX_SIZE);
-    color /= 5.0f;*/
-    color.w = 1.0f;
-    return color;
+        block[i] = texture(sampler2D(textures[textID+2], textSampler), uv+(vec2(1.0f,1.01f)-2*vec2(i/2, i%2))*HALF_PX_SIZE*3);
+    return block;
 }
 
 struct Welford
 {
-    vec4 mean;
-    float m2;
+    mat4 mean;
+    vec4 m2;
     int n;
 };
-    Welford welford = Welford(vec4(0),0,0);
-void addWelford(vec4 color)
+    Welford welford = Welford(mat4(0),vec4(0),0);
+void addWelford(mat4 block)
 {
     welford.n++;
-    vec4 delta = color-welford.mean;
-    float dist = colorDistance(color, welford.mean);
+    mat4 delta = block-welford.mean;
+    vec4 dist = blockDistance(block, welford.mean);
     welford.mean += delta/welford.n;
-    welford.m2 = dist*colorDistance(color, welford.mean);
+    welford.m2 = dist*blockDistance(block, welford.mean);
 }
 float finishWelford()
 {
-    float result = welford.m2; // /welford.n
-    welford.mean = vec4(0);
-    welford.m2 = 0;
+    float result = dot(welford.m2, vec4(1)); // /4*welford.n
+    welford.mean = mat4(0);
+    welford.m2 = vec4(0);
     welford.n = 0;
     return result; 
 }
@@ -66,8 +70,7 @@ void main()
         for(int j=0; j<4; j++)
         {
             ivec2 coord = outCoord + ivec2(round(lfFrameOffset(j)*getPxFocus(i)));
-            vec4 color = sampleImage(coord, j);
-            addWelford(color);
+            addWelford(sampleImage(coord, j));
         }
         float variance = finishWelford();
         if(variance < minVariance)
@@ -76,15 +79,5 @@ void main()
             minSample = i;
         }
      }
-
-/*        vec4 cc = vec4(0);
-for(int i=0; i<4; i++)
-cc+=sampleImage(outCoord + ivec2(round(lfFrameOffset(i)*uniforms.focus)), i);
-cc /= 4;
-
-vec4 c = vec4(float(minSample)/SAMPLE_COUNT);
-c=cc;
-imageStore(images[OUTPUT_TEXTURE_ID], outCoord,c);*/
-
-        imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(float(minSample)/SAMPLE_COUNT));
+     imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(float(minSample)/SAMPLE_COUNT));
 }

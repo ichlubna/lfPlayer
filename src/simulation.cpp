@@ -109,10 +109,10 @@ void Simulation::processInputs()
             camera->move(Camera::Direction::FRONT, speed.x);
 
         if(inputs->pressed(Inputs::LMB))
-            *gpu->uniforms.focus -= 0.05f;
+            *gpu->uniforms.focus -= 1.0f;
         if(inputs->pressed(Inputs::RMB))
-            *gpu->uniforms.focus += 0.05f;
-        
+            *gpu->uniforms.focus += 1.0f;
+       std::cerr << *gpu->uniforms.focus << std::endl; 
         constexpr float delta{0.0001f};
         camera->clampPosition(glm::vec2(cameraBounds.x+delta, cameraBounds.y-delta));
 
