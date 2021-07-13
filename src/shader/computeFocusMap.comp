@@ -1,18 +1,10 @@
 #version 450
 #include "computeHeader.glsl"
-vec2 PX_SIZE = 1.0f/ivec2(WIDTH, HEIGHT);
-vec2 HALF_PX_SIZE = PX_SIZE/2;
-
-float colorToGrayscale(vec4 c)
-{
-    return c.r*0.299 + c.g*0.587 + c.b*0.114;
-}
 
 //discards the 4th attribute
 float colorDistance(vec4 a, vec4 b)
 {
     return max(max(abs(a.r-b.r), abs(a.g-b.g)), abs(a.b-b.b)); //Chebyshev
-    //return max(max(abs(a.r-b.r), abs(a.g-b.g)), abs(a.b-b.b)); //Chebyshev
 }
 
 vec4 blockDistance(mat4 a, mat4 b)
@@ -23,13 +15,12 @@ vec4 blockDistance(mat4 a, mat4 b)
     return distances;
 }
 
-mat4 sampleImage(ivec2 coord, int textID)
+mat4 sampleImage(vec2 coord, int textID)
 {
-    const vec2 uv = normalizeCoord(coord);
-    vec4 c = texture(sampler2D(textures[textID+2], textSampler), uv);
+    vec4 c = texture(sampler2D(textures[textID+2], textSampler), coord);
     mat4 block;
     for(int i=0; i<4; i++)
-        block[i] = texture(sampler2D(textures[textID+2], textSampler), uv+(vec2(1.0f,1.01f)-2*vec2(i/2, i%2))*HALF_PX_SIZE*3);
+        block[i] = texture(sampler2D(textures[textID+2], textSampler), coord+(vec2(1.0f,1.01f)-2*vec2(i/2, i%2))*HALF_PX_SIZE*3);
     return block;
 }
 
@@ -57,27 +48,68 @@ float finishWelford()
     return result; 
 }
 
+float getVariance(int s)
+{
+    for(int i=0; i<4; i++)
+    {
+        vec2 offset = vec2(lfFrameOffset(i)*calculateFocus(s)*rangeLimit);
+        offset.x *= ASPECT_RATIO;
+        vec2 coord = outUV + offset;
+        addWelford(sampleImage(coord, i));
+    }
+    return finishWelford();
+}
+
 void main()
 {
-    const ivec2 outCoord = ivec2(gl_GlobalInvocationID.xy);
     if(any(greaterThan(outCoord,ivec2(WIDTH,HEIGHT))))
         return;
-    
+/* 
     float minVariance = 999.0f;
     int minSample = 0;
     for(int i=0; i<SAMPLE_COUNT; i++)
     { 
-        for(int j=0; j<4; j++)
-        {
-            ivec2 coord = outCoord + ivec2(round(lfFrameOffset(j)*getPxFocus(i)));
-            addWelford(sampleImage(coord, j));
-        }
-        float variance = finishWelford();
+        float variance = getVariance(i);
         if(variance < minVariance)
         {
             minVariance = variance;
             minSample = i;
         }
-     }
-     imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(float(minSample)/SAMPLE_COUNT));
+    }
+*/
+
+    const vec2 INIT_MIN = vec2(9999.0f, 0);
+    vec2 mins[3] = {INIT_MIN, INIT_MIN, INIT_MIN};
+    vec2 max = vec2(0,0);
+    for(int i=0; i<SAMPLE_COUNT; i++)
+    { 
+        float variance = getVariance(i);
+        if(variance > max.x) max=vec2(variance, i);
+        if(variance < mins[0].x)
+        {
+            mins[2] = mins[1];
+            mins[1] = mins[0];
+            mins[0] = vec2(variance, float(i));
+        }
+        else if(variance < mins[1].x)
+        {
+            mins[2] = mins[1];
+            mins[1] = vec2(variance, float(i));
+        }
+        else if(variance < mins[2].x)
+        {
+            mins[2] = vec2(variance, float(i));
+        }
+    }  
+
+    
+    vec2 pixel = vec2(mins[0].y/SAMPLE_COUNT, 0);
+    vec2 delta = abs(mins[0]-mins[1]) + abs(mins[2]-mins[1]) + abs(mins[0]-mins[2]);
+    delta /= 3;
+    if(mins[1].x > 0.0005)
+    if(delta.y > 30)
+        pixel.y = 1.0f;
+
+    imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0));
+    //imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(mins[0].y/SAMPLE_COUNT));
 }

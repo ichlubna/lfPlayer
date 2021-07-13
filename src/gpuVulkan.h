@@ -185,10 +185,21 @@ class GpuVulkan : public Gpu
         static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
         static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
 
+        float aspect = static_cast<float>(Gpu::lfInfo.height)/Gpu::lfInfo.width;
+        float pxSizeX = 1.0f/Gpu::lfInfo.width; 
+        float pxSizeY = 1.0f/Gpu::lfInfo.height; 
+        float halfPxSizeX = pxSizeX/2; 
+        float halfPxSizeY = pxSizeY/2; 
         std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT),
                                              LOCAL_SIZE_X, LOCAL_SIZE_Y,
                                              static_cast<int>(Gpu::lfInfo.cols), static_cast<int>(Gpu::lfInfo.rows),
-                                             static_cast<int>(Gpu::lfInfo.width), static_cast<int>(Gpu::lfInfo.height)}; 
+                                             static_cast<int>(Gpu::lfInfo.width), static_cast<int>(Gpu::lfInfo.height),
+                                             *reinterpret_cast<int*>(&aspect),
+                                             *reinterpret_cast<int*>(&pxSizeX),
+                                             *reinterpret_cast<int*>(&pxSizeY),
+                                             *reinterpret_cast<int*>(&halfPxSizeX),
+                                             *reinterpret_cast<int*>(&halfPxSizeY),
+                                            }; 
         std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
         std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
 

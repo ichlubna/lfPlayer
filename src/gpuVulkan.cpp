@@ -1087,7 +1087,7 @@ void GpuVulkan::allocateTextures()
     {
         for(size_t i=0; i<frameData.textures.maxCount; i++)
             frameData.textures.images.emplace_back();
-        frameData.textures.images.back().format = vk::Format::eR8Unorm;
+        frameData.textures.images.back().format = vk::Format::eR8G8Unorm;//eR8Unorm;
         
         allocateTextureResources(frameData.textures, vk::ImageUsageFlagBits::eStorage);
         frameData.sampler = createSampler();
