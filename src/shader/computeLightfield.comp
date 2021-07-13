@@ -15,10 +15,7 @@ void main()
         invalid += texture(sampler2D(textures[FOCUSMAP_TEXTURE_ID], textSampler), outUV+(vec2(1.0f,1.01f)-2*vec2(i/2, i%2))*HALF_PX_SIZE*3).y;
     if(invalid > 0.0f)
         minSample = int(round(SAMPLE_COUNT*medianLoad(32, outUV, FOCUSMAP_TEXTURE_ID)));  
-   
-    for(int j=0; j<4; j++)
-        color += lfFrameWeight(j)*texture(sampler2D(textures[2+j], textSampler),lfFrameOffset(j)*calculateFocus(minSample)*rangeLimit*vec2(ASPECT_RATIO, 1.0f)+outUV);
-   
+    
     color = vec4(float(minSample)/SAMPLE_COUNT); 
     color.w = 1.0f;
     imageStore(images[OUTPUT_TEXTURE_ID], outCoord, color);
