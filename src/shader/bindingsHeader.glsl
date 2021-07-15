@@ -1,15 +1,16 @@
-layout(constant_id = 0) const int MAX_TEXTURES = 64;
-layout(constant_id = 3) const int ROWS = 8;
-layout(constant_id = 4) const int COLS = 8;
-layout(constant_id = 5) const int WIDTH = 1920;
-layout(constant_id = 6) const int HEIGHT = 1080;
-layout(constant_id = 7) const float ASPECT_RATIO = 1.78;
-layout(constant_id = 8) const float PX_SIZE_X = 0.0005;
-layout(constant_id = 9) const float PX_SIZE_Y = 0.0009;
-layout(constant_id = 10) const float HALF_PX_SIZE_X = 0.00025;
-layout(constant_id = 11) const float HALF_PX_SIZE_Y = 0.00045;
-vec2 PX_SIZE = vec2(PX_SIZE_X, PX_SIZE_Y);
-vec2 HALF_PX_SIZE = vec2(HALF_PX_SIZE_X, HALF_PX_SIZE_Y);
+layout(constant_id = 0) const int MAX_TEXTURES = 10;
+layout(constant_id = 3) const int LF_WIDTH = 1920;
+layout(constant_id = 4) const int LF_HEIGHT = 1080;
+layout(constant_id = 5) const float ASPECT_RATIO = 1920/1080.0f;
+layout(constant_id = 6) const float LF_HALF_PX_SIZE_X = 1/1920.0f;
+layout(constant_id = 7) const float LF_HALF_PX_SIZE_Y = 1/1080.0f;
+layout(constant_id = 8) const float MAP_HALF_PX_SIZE_X = 1/1920.0f;
+layout(constant_id = 9) const float MAP_HALF_PX_SIZE_Y = 1/1080.0f;
+layout(constant_id = 10) const int SAMPLE_COUNT = 255;
+layout(constant_id = 11) const int MAP_WIDTH = 1920;
+layout(constant_id = 12) const int MAP_HEIGHT = 1080;
+vec2 LF_HALF_PX_SIZE = vec2(LF_HALF_PX_SIZE_X, LF_HALF_PX_SIZE_Y);
+vec2 MAP_HALF_PX_SIZE = vec2(MAP_HALF_PX_SIZE_X, MAP_HALF_PX_SIZE_Y);
 
 layout(set = 0, binding = 0) uniform uniformBuffer
 {

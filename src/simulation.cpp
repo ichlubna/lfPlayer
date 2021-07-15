@@ -6,7 +6,7 @@
 #include "windowGlfw.h"
 
 #include <iostream>
-Simulation::Simulation(std::string filename, GpuAPI gpuApi, WindowAPI windowApi) : camera{std::make_unique<Camera>()}
+Simulation::Simulation(std::string filename, float focusMapScale, int focusMapIterations, GpuAPI gpuApi, WindowAPI windowApi) : camera{std::make_unique<Camera>()}
 {
 	switch(windowApi)
 	{
@@ -28,7 +28,7 @@ Simulation::Simulation(std::string filename, GpuAPI gpuApi, WindowAPI windowApi)
 	switch(gpuApi)
 	{
 		case GPU_VULKAN:
-			gpu = std::make_unique<GpuVulkan>(window.get(), lfInfo);
+			gpu = std::make_unique<GpuVulkan>(window.get(), lfInfo, Gpu::FocusMapSettings{focusMapScale, static_cast<size_t>(focusMapIterations)});
 		break;
 		
 		default:

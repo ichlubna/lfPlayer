@@ -408,8 +408,7 @@ void GpuVulkan::createComputeCommandBuffers()
                 throw std::runtime_error("Compute command buffer recording couldn't begin.");
             submitData.commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipeline));
             submitData.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipelineLayout), 0, 1, &*frameData.generalDescriptorSet, 0, {});
-            //pipeline->commandBuffer->pushConstants(*pipeline->pipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
-            submitData.commandBuffer->dispatch(glm::ceil(Gpu::lfInfo.width/static_cast<float>(LOCAL_SIZE_X)), glm::ceil(Gpu::lfInfo.height/static_cast<float>(LOCAL_SIZE_Y)),1); 
+            submitData.commandBuffer->dispatch(glm::ceil(Gpu::focusMapSettings.width/static_cast<float>(LOCAL_SIZE_X)), glm::ceil(Gpu::focusMapSettings.height/static_cast<float>(LOCAL_SIZE_Y)),1);
             submitData.commandBuffer->end();
         }
     }
@@ -1076,7 +1075,7 @@ void GpuVulkan::allocateTextureResources(Textures &textures, vk::ImageUsageFlags
     for(auto &texture : textures.images)
     {
         vk::ImageUsageFlags usage{vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled | usageFlags};
-        texture.image = createImage(Gpu::lfInfo.width, Gpu::lfInfo.height, texture.format, vk::ImageTiling::eOptimal, usage, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        texture.image = createImage(texture.width, texture.height, texture.format, vk::ImageTiling::eOptimal, usage, vk::MemoryPropertyFlagBits::eDeviceLocal);
         texture.imageView = createImageView(*texture.image.textureImage, texture.format, vk::ImageAspectFlagBits::eColor);
     }
 }
@@ -1086,14 +1085,27 @@ void GpuVulkan::allocateTextures()
     for(auto &frameData : inFlightFrames.perFrameData)
     {
         for(size_t i=0; i<frameData.textures.maxCount; i++)
+        {
             frameData.textures.images.emplace_back();
-        frameData.textures.images.back().format = vk::Format::eR8G8Unorm;//eR8Unorm;
+            auto &current = frameData.textures.images.back();
+            current.width=Gpu::focusMapSettings.width;
+            current.height=Gpu::focusMapSettings.height;
+        }
+       
+        //0 outputtext, 1 focusmap 
+        frameData.textures.images[0].format = vk::Format::eR8Unorm;//eR8Unorm;
+        frameData.textures.images[1].format = vk::Format::eR8G8Unorm;//eR8Unorm;
         
         allocateTextureResources(frameData.textures, vk::ImageUsageFlagBits::eStorage);
         frameData.sampler = createSampler();
     }
     for(size_t i=0; i<frameTextures.maxCount; i++)
+    {
         frameTextures.images.emplace_back();
+        auto &current = frameTextures.images.back();
+        current.width=Gpu::lfInfo.width;
+        current.height=Gpu::lfInfo.height;
+    }
     allocateTextureResources(frameTextures);
 }
 
@@ -1169,9 +1181,9 @@ vk::UniqueSampler GpuVulkan::createSampler()
     vk::SamplerCreateInfo createInfo;
     createInfo  .setMagFilter(vk::Filter::eLinear)
         .setMinFilter(vk::Filter::eLinear)
-        .setAddressModeU(vk::SamplerAddressMode::eRepeat)
-        .setAddressModeV(vk::SamplerAddressMode::eRepeat)
-        .setAddressModeW(vk::SamplerAddressMode::eRepeat)
+        .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
+        .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
+        .setAddressModeW(vk::SamplerAddressMode::eClampToEdge)
         .setAnisotropyEnable(true)
         .setMaxAnisotropy(16)
         .setBorderColor(vk::BorderColor::eIntOpaqueBlack)
@@ -1269,7 +1281,7 @@ void GpuVulkan::recreateSwapChain()
     createGraphicsCommandBuffers();
 }
 
-GpuVulkan::GpuVulkan(Window* w, Gpu::LfInfo lfInfo) : Gpu(w, lfInfo)
+GpuVulkan::GpuVulkan(Window* w, Gpu::LfInfo lfInfo, Gpu::FocusMapSettings fs) : Gpu(w, lfInfo, fs)
 {
     createInstance();
     selectPhysicalDevice();

@@ -58,13 +58,26 @@ class Gpu
             bool changed{true};
         };
 
+        class FocusMapSettings
+        {
+            public:
+            float scale{1};
+            size_t iterations{256};
+            size_t width{1920}, height{1080};
+        };
+
         virtual void loadFrameTextures(Resources::ImageGrid &images) = 0;
         void updateFrameIndices(std::vector<LfCurrentFrame> &frames);
 		virtual void render() = 0;
-		Gpu(Window *w, LfInfo lf) : windowPtr{w}, lfInfo{lf}{};
+		Gpu(Window *w, LfInfo lf, FocusMapSettings fs) : windowPtr{w}, lfInfo{lf}, focusMapSettings{fs}
+        {
+            focusMapSettings.width = lfInfo.width*focusMapSettings.scale;
+            focusMapSettings.height = lfInfo.height*focusMapSettings.scale;
+        };
 	protected:
 		Window *windowPtr;
         LfInfo lfInfo;
+        FocusMapSettings focusMapSettings;
         std::vector<LfCurrentFrame> currentFrames{4};
 };
 

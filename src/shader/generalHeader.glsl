@@ -1,6 +1,5 @@
-const int SAMPLE_COUNT = 256;
-const float SAMPLE_STEP = 1.0f/SAMPLE_COUNT;
-const float rangeLimit = 0.06;
+float SAMPLE_STEP = 1.0f/SAMPLE_COUNT;
+const float rangeLimit = 0.03;
 
 float calculateFocus(int fi)
 {
@@ -61,7 +60,7 @@ void minmax6(inout ivec4 e[3])
     minmax(e[0].xw, e[1].xy);   
 }
 
-float medianLoad(int size, vec2 coord, int imgId)
+float medianLoad(vec2 size, vec2 coord, int imgId)
 {
     ivec4 e[3]; 
     int i = 0;
@@ -70,7 +69,7 @@ float medianLoad(int size, vec2 coord, int imgId)
     {
         for (offset.x = -1; offset.x <= 1; ++offset.x)
         {
-            e[i / 4][i % 4] = int(round(/*imageLoad(images[imgId], coord + offset).x*255));*/texture(sampler2D(textures[imgId], textSampler), coord+offset*(PX_SIZE*size+HALF_PX_SIZE)).r*255)); 
+            e[i / 4][i % 4] = int(round(texture(sampler2D(textures[imgId], textSampler), coord+offset*(size)).r*255)); 
 
             ++i;
         }
