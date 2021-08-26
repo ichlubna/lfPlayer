@@ -59,8 +59,6 @@ void GpuVulkan::createInstance()
       vk::enumerateInstanceExtensionProperties({}, &extensionCount, {});
       std::vector<vk::ExtensionProperties> supportedExt(extensionCount);
       vk::enumerateInstanceExtensionProperties({}, &extensionCount, supportedExt.data());*/
-
-    //instance.createDebugReportCallbackEXT();
 }
 
 bool GpuVulkan::isDeviceOK(const vk::PhysicalDevice &potDevice)
@@ -208,11 +206,9 @@ void GpuVulkan::createSwapChain()
         else if(potPm == vk::PresentModeKHR::eImmediate)
             presentMode = potPm;
 
-    //auto winSize = windowPtr->getSize();
     auto winSize = windowPtr->getFramebufferSize();
     //might differ TODO
     extent = vk::Extent2D(winSize.width, winSize.height);
-    //extent = vk::Extent2D(1920,1200);
 
     unsigned int imageCount = surfaceCapabilities.minImageCount + 1; 
     if(surfaceCapabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.maxImageCount )
@@ -277,10 +273,10 @@ vk::UniqueShaderModule GpuVulkan::createShaderModule(std::vector<char> source)
     vk::ShaderModuleCreateInfo createInfo;
     createInfo  .setCodeSize(source.size())
         .setPCode(reinterpret_cast<const uint32_t*>(source.data()));
-    vk::UniqueShaderModule module;
-    if(!(module = device->createShaderModuleUnique(createInfo)))
+    vk::UniqueShaderModule shaderModule;
+    if(!(shaderModule = device->createShaderModuleUnique(createInfo)))
         throw std::runtime_error("Cannot create a shader module.");
-    return module;
+    return shaderModule;
 }  
 
 void GpuVulkan::createRenderPass()
@@ -370,7 +366,6 @@ void GpuVulkan::createDescriptorSetLayout()
     
     std::vector<vk::DescriptorSetLayoutBinding> bindings{uboLayoutBinding, samplerLayoutBinding, imageLayoutBinding, textureLayoutBinding};
     
-    //std::vector<vk::DescriptorBindingFlags> bindingFlags{4,vk::DescriptorBindingFlagBits::eUpdateAfterBind};
     std::vector<vk::DescriptorBindingFlags> bindingFlags{{}, {}, {},vk::DescriptorBindingFlagBits::eUpdateAfterBind};
     vk::DescriptorSetLayoutBindingFlagsCreateInfo bindingInfo;
     bindingInfo.setBindingCount(bindingFlags.size());
@@ -408,7 +403,10 @@ void GpuVulkan::createComputeCommandBuffers()
                 throw std::runtime_error("Compute command buffer recording couldn't begin.");
             submitData.commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipeline));
             submitData.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipelineLayout), 0, 1, &*frameData.generalDescriptorSet, 0, {});
-            submitData.commandBuffer->dispatch(glm::ceil(Gpu::focusMapSettings.width/static_cast<float>(LOCAL_SIZE_X)), glm::ceil(Gpu::focusMapSettings.height/static_cast<float>(LOCAL_SIZE_Y)),1);
+            std::pair<size_t, size_t> resolution{Gpu::focusMapSettings.width, Gpu::focusMapSettings.height};
+            if(originalComputeShaderResolution[i])
+                resolution = {Gpu::lfInfo.width, Gpu::lfInfo.height};
+            submitData.commandBuffer->dispatch(glm::ceil(resolution.first/static_cast<float>(LOCAL_SIZE_X)), glm::ceil(resolution.second/static_cast<float>(LOCAL_SIZE_Y)),1);
             submitData.commandBuffer->end();
         }
     }
@@ -474,8 +472,8 @@ void GpuVulkan::createSpecializationInfo()
         specializationEntries.emplace_back();
         specializationEntries.back()   
             .setConstantID(i)
-            .setOffset(i*sizeof(uint32_t))
-            .setSize(sizeof(uint32_t));
+            .setOffset(i*sizeof(int32_t))
+            .setSize(sizeof(int32_t));
     }
     specializationInfo.setMapEntryCount(specializationEntries.size())
         .setPMapEntries(specializationEntries.data()) 
@@ -495,8 +493,8 @@ void GpuVulkan::createGraphicsPipeline()
     shaderStages.at(0)  .setStage(vk::ShaderStageFlagBits::eVertex)
         .setModule(*vertexModule)
         .setPName("main")
-        .setPSpecializationInfo({}); //can set shader constants - changing behaviour at creation
-    shaderStages.at(1)  .setStage(vk::ShaderStageFlagBits::eFragment)
+        .setPSpecializationInfo({}); 
+        shaderStages.at(1)  .setStage(vk::ShaderStageFlagBits::eFragment)
         .setModule(*fragmentModule)
         .setPName("main")
         .setPSpecializationInfo(&specializationInfo);
@@ -669,13 +667,10 @@ void GpuVulkan::createGraphicsCommandBuffers()
        frameData.frame.commandBuffer->beginRenderPass(passBeginInfo, vk::SubpassContents::eInline);
        frameData.frame.commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
        frameData.frame.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *graphicsPipelineLayout, 0, 1, &*frameData.generalDescriptorSet, 0, {});
-       //frame->commandBuffer->pushConstants(*graphicsPipelineLayout, pushConstantRange.stageFlags, pushConstantRange.offset, pushConstantRange.size, Gpu::uniforms.getData()->data());
        frameData.frame.commandBuffer->draw(3, 1, 0, 0);
        frameData.frame.commandBuffer->endRenderPass();
 
        frameData.frame.commandBuffer->end();
-        /* != vk::Result::eSuccess)
-           throw std::runtime_error("Cannot record command buffer.");*/    
     }
 }
 
@@ -863,14 +858,12 @@ vk::Format GpuVulkan::getSupportedFormat(const std::vector<vk::Format>& candidat
         else if (tiling == vk::ImageTiling::eOptimal && (properties.optimalTilingFeatures & features) == features) 
             return format;
     }
-
     throw std::runtime_error("Cannot find supported format!");
 }
 
 vk::Format GpuVulkan::getDepthFormat()
 {
     return getSupportedFormat({vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint}, vk::ImageTiling::eOptimal, vk::FormatFeatureFlagBits::eDepthStencilAttachment);
-
 }
 
 void GpuVulkan::createDepthImage()
@@ -879,7 +872,6 @@ void GpuVulkan::createDepthImage()
     depthImage.image = createImage(extent.width, extent.height, format, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal);
     depthImage.imageView = createImageView(*depthImage.image.textureImage, format, vk::ImageAspectFlagBits::eDepth);
     transitionImageLayout(*depthImage.image.textureImage, format, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
-
 }
 
 vk::UniqueCommandBuffer GpuVulkan::oneTimeCommandsStart()

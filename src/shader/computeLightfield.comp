@@ -17,6 +17,7 @@ void main()
         minSample = int(round(SAMPLE_COUNT*medianLoad(32*MAP_HALF_PX_SIZE*2, mapUV, FOCUSMAP_TEXTURE_ID)));  
     
     color = vec4(float(minSample)/SAMPLE_COUNT); 
+    //color = vec4(float(invalid>0));
     color.w = 1.0f;
     imageStore(images[OUTPUT_TEXTURE_ID], outCoord, color);
 }

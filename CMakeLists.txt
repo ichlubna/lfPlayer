@@ -39,20 +39,16 @@ fragment.frag
 vertex.vert
 computeFocusMap.comp
 computeLightfield.comp
+computeRange.comp
 )
 
 add_custom_target(shader WORKING_DIRECTORY ${CMAKE_PROJECT_DIR})
 foreach(SHADER_NAME ${SHADER_LIST})
     cmake_path(GET SHADER_NAME STEM STEM_NAME)
     set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/${SHADER_COMPILATION_PATH}/${STEM_NAME}.spv)
-    add_custom_command(TARGET shader COMMAND ${GLSLC_BINARY} ${CMAKE_SOURCE_DIR}/${SHADER_SRC_PATH}/${SHADER_NAME} -o ${CMAKE_SOURCE_DIR}/${SHADER_COMPILATION_PATH}/${STEM_NAME}.spv -O)
+    add_custom_command(TARGET shader COMMAND ${GLSLC_BINARY} ${CMAKE_SOURCE_DIR}/${SHADER_SRC_PATH}/${SHADER_NAME} -o ${CMAKE_SOURCE_DIR}/${SHADER_COMPILATION_PATH}/${STEM_NAME}.spv -O --target-env=vulkan1.2)
 endforeach()
 
-
-
-#add_custom_target(shader    COMMAND ${GLSLC_BINARY} ${CMAKE_SOURCE_DIR}/src/shader/vertex.vert -o ${CMAKE_SOURCE_DIR}/precompiled/vertex.spv -O
-#                            COMMAND ${GLSLC_BINARY} ${CMAKE_SOURCE_DIR}/src/shader/fragment.frag -o ${CMAKE_SOURCE_DIR}/precompiled/fragment.spv -O
-#    						WORKING_DIRECTORY ${CMAKE_PROJECT_DIR})
 target_link_libraries(${PROJECT_NAME} vulkan glfw glm)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)

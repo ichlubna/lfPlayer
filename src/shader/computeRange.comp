@@ -1,0 +1,64 @@
+#version 450
+#extension GL_ARB_shader_ballot : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_basic : require
+
+#extension GL_EXT_debug_printf : enable
+
+#include "computeHeader.glsl"
+#include "welfordHeader.glsl"
+
+const int SUBGROUPS_NUM = 256/32; //(gl_WorkGroupSize.x*gl_WorkGroupSize.y)/gl_SubgroupSize
+shared vec2 groupMins[SUBGROUPS_NUM];
+
+void main()
+{
+    if(any(greaterThan(outCoord,ivec2(LF_WIDTH,LF_HEIGHT))))
+        return;
+
+    float normScanStep = ((LF_WIDTH/4.0f)/(gl_WorkGroupSize.x*gl_WorkGroupSize.y))/LF_WIDTH;
+    //TODO offset od kraje
+    uvec2 pixelCoord = gl_WorkGroupID.xy*gl_WorkGroupSize.xy;
+    vec2 pixelCoordRelative = vec2(pixelCoord)/vec2(LF_WIDTH, LF_HEIGHT);
+    uint scanID = gl_LocalInvocationID.y*gl_WorkGroupSize.x + gl_LocalInvocationID.x;
+
+    vec2 minValue = vec2(9999.0f); 
+    mat4 color = sampleImage(pixelCoordRelative, 0);
+    //for(uint offset=scanSize*subPixelID; offset<scanSize*(subPixelID+1); offset++)
+    { 
+        float shift = scanID*normScanStep; 
+        float dist = blockDistance(color, sampleImage(pixelCoordRelative+shift, 1));
+        if(minValue.x > dist)
+            minValue = vec2(dist, scanID);
+    }
+    float groupMin = minValue.x;
+    groupMin=subgroupMin(groupMin);
+    if(groupMin == minValue.x)
+        groupMins[gl_SubgroupID] = minValue;
+    
+    memoryBarrierShared();
+    barrier();         
+
+    if(scanID==0)
+    {
+        vec2 totalMin = vec2(9999.0f);
+        for(int i=0; i<SUBGROUPS_NUM; i++)
+            if(groupMins[i].x < totalMin.x)
+                totalMin = groupMins[i];
+        debugPrintfEXT("%f", totalMin.x);
+      imageStore(images[OUTPUT_TEXTURE_ID], ivec2(pixelCoord/16+500), vec4(vec3(totalMin.y/256),1.0f));
+    }
+
+/*
+//Sequential
+color = sampleImage(mapUV, 0);
+vec2 m=vec2(9999.0f);
+for(int i=0; i<256; i++)
+{
+    float shift = i*normScanStep; 
+    float dist = blockDistance(color, sampleImage(mapUV+shift, 1));
+    if(m.x > dist) m= vec2(dist, float(i));
+}
+imageStore(images[OUTPUT_TEXTURE_ID], outCoord/*16+1000*/, vec4(vec3(m.y/256),1.0f));
+*/
+}

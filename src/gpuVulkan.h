@@ -13,13 +13,15 @@ class GpuVulkan : public Gpu
         std::string engineName{"I don't know"}; 
         std::string vertexShaderPath{"../precompiled/vertex.spv"};
         std::string fragmentShaderPath{"../precompiled/fragment.spv"};
-        inline static const std::vector<std::string> computeShaderPaths{"../precompiled/computeFocusMap.spv", "../precompiled/computeLightfield.spv"};
+        inline static const std::vector<std::string> computeShaderPaths{"../precompiled/computeRange.spv", "../precompiled/computeFocusMap.spv", "../precompiled/computeLightfield.spv"};
+        inline static const std::vector<bool> originalComputeShaderResolution{true, false, false};
 
         std::vector<const char*> instanceExtensions = {"VK_KHR_surface",
                                                         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME};
         std::vector<const char*> deviceExtensions{  VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                                                     VK_KHR_MAINTENANCE3_EXTENSION_NAME,
                                                     VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME};
+                                                    //VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME};
         const class
         {
             public:

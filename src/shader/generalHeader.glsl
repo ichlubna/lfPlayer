@@ -1,5 +1,6 @@
 float SAMPLE_STEP = 1.0f/SAMPLE_COUNT;
 const float rangeLimit = 0.03;
+//const float rangeLimit = 0.25;
 
 float calculateFocus(int fi)
 {
