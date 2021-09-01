@@ -46,7 +46,7 @@ add_custom_target(shader WORKING_DIRECTORY ${CMAKE_PROJECT_DIR})
 foreach(SHADER_NAME ${SHADER_LIST})
     cmake_path(GET SHADER_NAME STEM STEM_NAME)
     set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/${SHADER_COMPILATION_PATH}/${STEM_NAME}.spv)
-    add_custom_command(TARGET shader COMMAND ${GLSLC_BINARY} ${CMAKE_SOURCE_DIR}/${SHADER_SRC_PATH}/${SHADER_NAME} -o ${CMAKE_SOURCE_DIR}/${SHADER_COMPILATION_PATH}/${STEM_NAME}.spv -O --target-env=vulkan1.0)
+    add_custom_command(TARGET shader COMMAND ${GLSLC_BINARY} ${CMAKE_SOURCE_DIR}/${SHADER_SRC_PATH}/${SHADER_NAME} -o ${CMAKE_SOURCE_DIR}/${SHADER_COMPILATION_PATH}/${STEM_NAME}.spv -O --target-env=vulkan1.2)
 endforeach()
 
 target_link_libraries(${PROJECT_NAME} vulkan glfw glm)

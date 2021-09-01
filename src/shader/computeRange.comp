@@ -19,16 +19,15 @@ shared int finished;
 
 void main()
 {
+
     uvec2 pixelCoord = gl_WorkGroupID.xy*gl_WorkGroupSize.xy;
     if(any(greaterThan(pixelCoord,ivec2(LF_WIDTH,LF_HEIGHT))))
         return;
-    if(gl_WorkGroupID.x > 0 || gl_WorkGroupID.y != 0)
-       return;
+    uint scanID = gl_LocalInvocationIndex*ITERATIONS;
 
     //zkusit random prohledavani
     //TODO offset od kraje
     vec2 pixelCoordRelative = vec2(pixelCoord)/vec2(LF_WIDTH, LF_HEIGHT);
-    uint scanID = /*(gl_LocalInvocationID.y*gl_WorkGroupSize.x + gl_LocalInvocationID.x)*/gl_LocalInvocationIndex*ITERATIONS;
 
     vec2 minVariance = vec2(99999.0f);
     for(int i=0; i<ITERATIONS; i++)
@@ -46,7 +45,7 @@ void main()
     memoryBarrierShared();
     barrier();         
 
-    if(gl_LocalInvocationIndex == 0)//(scanID==0)
+    if(scanID==0)
     {
         vec2 totalMin = vec2(9999.0f);
         for(int i=0; i<SUBGROUPS_NUM; i++)
@@ -57,10 +56,13 @@ void main()
       //imageStore(images[OUTPUT_TEXTURE_ID], ivec2(pixelCoord/16+500), vec4(vec3(totalMin.y/256),1.0f));
     }
     memoryBarrierShared();
+    memoryBarrier();
+    memoryBarrierBuffer();
     barrier();         
-    //if(finished == gl_NumWorkGroups.x*gl_NumWorkGroups.y-1)//(LF_WIDTH*LF_HEIGHT)/256 - 1)
+
+    if(finished == gl_NumWorkGroups.x*gl_NumWorkGroups.y-1)//(LF_WIDTH*LF_HEIGHT)/256 - 1)
         if(scanID == 0) 
-            debugPrintfEXT("%d", shaderStorage.data[SHADER_STORAGE_SIZE-1]);
+            debugPrintfEXT("%d, %d", finished, shaderStorage.data[SHADER_STORAGE_SIZE-1]);
         //for(int i=0; i<GROUP_SIZE*ITERATIONS; i++)  
           //  debugPrintfEXT("%d,%d", i,shaderStorage.data[i]);
 
