@@ -20,8 +20,9 @@ class GpuVulkan : public Gpu
                                                         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME};
         std::vector<const char*> deviceExtensions{  VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                                                     VK_KHR_MAINTENANCE3_EXTENSION_NAME,
-                                                    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME};
-                                                    //VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME};
+                                                    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+                                                    VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+                                                    VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME};
         const class
         {
             public:
@@ -29,6 +30,7 @@ class GpuVulkan : public Gpu
             unsigned int sampler{1};
             unsigned int images{2};
             unsigned int textures{3};
+            unsigned int shaderStorage{4};
         } bindings;
 
         class PipelineSync
@@ -104,6 +106,7 @@ class GpuVulkan : public Gpu
         {
             public: 
                 vk::DescriptorBufferInfo bufferInfo;
+                vk::DescriptorBufferInfo shaderStorageInfo;
                 vk::DescriptorImageInfo samplerInfo;
                 std::vector<vk::DescriptorImageInfo> imageInfos;
                 std::vector<vk::WriteDescriptorSet> writeSets;
@@ -119,6 +122,7 @@ class GpuVulkan : public Gpu
                 Textures textures{TEXTURE_COUNT};
                 vk::UniqueDescriptorSet generalDescriptorSet; 
                 Buffer uniformBuffer;
+                Buffer shaderStorageBuffer;
                 SwapChainFrame frame;
                 vk::UniqueSampler sampler;
                 DescriptorWrite descriptorWrite;
@@ -183,6 +187,8 @@ class GpuVulkan : public Gpu
 
         std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
         int textureWriteSetIndex{0};
+        static constexpr size_t SHADER_STORAGE_COUNT = 1024+1;
+        static constexpr size_t SHADER_STORAGE_SIZE = sizeof(int)*SHADER_STORAGE_COUNT;
         static constexpr int WARP_SIZE{32};
         static constexpr int LOCAL_SIZE_X{WARP_SIZE/2};
         static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
@@ -202,7 +208,8 @@ class GpuVulkan : public Gpu
                                              *reinterpret_cast<int*>(&mapHalfPxSizeX),
                                              *reinterpret_cast<int*>(&mapHalfPxSizeY),
                                              static_cast<int>(Gpu::focusMapSettings.iterations),
-                                             static_cast<int>(Gpu::focusMapSettings.width), static_cast<int>(Gpu::focusMapSettings.height)
+                                             static_cast<int>(Gpu::focusMapSettings.width), static_cast<int>(Gpu::focusMapSettings.height),
+                                             SHADER_STORAGE_COUNT
                                             }; 
         std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
         std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};

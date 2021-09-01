@@ -39,3 +39,15 @@ float finishWelford()
     welford.n = 0;
     return result; 
 }
+
+float getVariance(float normDisplacement, vec2 coords)
+{
+    for(int i=0; i<4; i++)
+    {
+        vec2 offset = vec2(lfFrameOffset(i)*normDisplacement);
+        offset.x *= ASPECT_RATIO;
+        vec2 coord = coords + offset;
+        addWelford(sampleImage(coord, i));
+    }
+    return finishWelford();
+}

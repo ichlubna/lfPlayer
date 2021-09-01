@@ -2,18 +2,6 @@
 #include "computeHeader.glsl"
 #include "welfordHeader.glsl"
 
-float getVariance(int s)
-{
-    for(int i=0; i<4; i++)
-    {
-        vec2 offset = vec2(lfFrameOffset(i)*calculateFocus(s)*rangeLimit);
-        offset.x *= ASPECT_RATIO;
-        vec2 coord = mapUV + offset;
-        addWelford(sampleImage(coord, i));
-    }
-    return finishWelford();
-}
-
 void main()
 {
     if(any(greaterThan(outCoord,ivec2(MAP_WIDTH,MAP_HEIGHT))))
@@ -36,7 +24,7 @@ void main()
     vec2 mins[3] = {INIT_MIN, INIT_MIN, INIT_MIN};
     for(int i=0; i<SAMPLE_COUNT; i++)
     { 
-        float variance = getVariance(i);
+        float variance = getVariance(calculateFocus(i)*rangeLimit, mapUV);
         if(variance < mins[0].x)
         {
             mins[2] = mins[1];
@@ -65,4 +53,5 @@ void main()
         pixel.y = 1.0f;
 
     imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0));
+   
 }

@@ -8,57 +8,70 @@
 #include "computeHeader.glsl"
 #include "welfordHeader.glsl"
 
+const int GROUP_SIZE = 256; //(gl_WorkGroupSize.x*gl_WorkGroupSize.y)
 const int SUBGROUPS_NUM = 256/32; //(gl_WorkGroupSize.x*gl_WorkGroupSize.y)/gl_SubgroupSize
+const int ITERATIONS = 1;
+const int SCAN_RESOLUTION = GROUP_SIZE*ITERATIONS;
+float normScanStep = ((LF_WIDTH/4.0f)/SCAN_RESOLUTION)/LF_WIDTH;
+
 shared vec2 groupMins[SUBGROUPS_NUM];
+shared int finished;
 
 void main()
 {
-    if(any(greaterThan(outCoord,ivec2(LF_WIDTH,LF_HEIGHT))))
-        return;
-
-    float normScanStep = ((LF_WIDTH/4.0f)/(gl_WorkGroupSize.x*gl_WorkGroupSize.y))/LF_WIDTH;
-    //TODO offset od kraje
     uvec2 pixelCoord = gl_WorkGroupID.xy*gl_WorkGroupSize.xy;
-    vec2 pixelCoordRelative = vec2(pixelCoord)/vec2(LF_WIDTH, LF_HEIGHT);
-    uint scanID = gl_LocalInvocationID.y*gl_WorkGroupSize.x + gl_LocalInvocationID.x;
+    if(any(greaterThan(pixelCoord,ivec2(LF_WIDTH,LF_HEIGHT))))
+        return;
+    if(gl_WorkGroupID.x > 0 || gl_WorkGroupID.y != 0)
+       return;
 
-    vec2 minValue = vec2(9999.0f); 
-    mat4 color = sampleImage(pixelCoordRelative, 0);
-    //for(uint offset=scanSize*subPixelID; offset<scanSize*(subPixelID+1); offset++)
-    { 
-        float shift = scanID*normScanStep; 
-        float dist = blockDistance(color, sampleImage(pixelCoordRelative+shift, 1));
-        if(minValue.x > dist)
-            minValue = vec2(dist, scanID);
+    //zkusit random prohledavani
+    //TODO offset od kraje
+    vec2 pixelCoordRelative = vec2(pixelCoord)/vec2(LF_WIDTH, LF_HEIGHT);
+    uint scanID = /*(gl_LocalInvocationID.y*gl_WorkGroupSize.x + gl_LocalInvocationID.x)*/gl_LocalInvocationIndex*ITERATIONS;
+
+    vec2 minVariance = vec2(99999.0f);
+    for(int i=0; i<ITERATIONS; i++)
+    {
+        int id = int(scanID);
+        vec2 variance = vec2(getVariance(id*normScanStep, pixelCoordRelative), float(id));
+        if(minVariance.x>variance.x)
+            minVariance = variance;
     }
-    float groupMin = minValue.x;
+    float groupMin = minVariance.x;
     groupMin=subgroupMin(groupMin);
-    if(groupMin == minValue.x)
-        groupMins[gl_SubgroupID] = minValue;
+    if(groupMin == minVariance.x)
+        groupMins[gl_SubgroupID] = minVariance;
     
     memoryBarrierShared();
     barrier();         
 
-    if(scanID==0)
+    if(gl_LocalInvocationIndex == 0)//(scanID==0)
     {
         vec2 totalMin = vec2(9999.0f);
         for(int i=0; i<SUBGROUPS_NUM; i++)
             if(groupMins[i].x < totalMin.x)
                 totalMin = groupMins[i];
-        debugPrintfEXT("%f", totalMin.x);
-      imageStore(images[OUTPUT_TEXTURE_ID], ivec2(pixelCoord/16+500), vec4(vec3(totalMin.y/256),1.0f));
+      atomicAdd(shaderStorage.data[int(totalMin.y)] ,1);
+      finished = atomicAdd(shaderStorage.data[SHADER_STORAGE_SIZE-1] ,1);
+      //imageStore(images[OUTPUT_TEXTURE_ID], ivec2(pixelCoord/16+500), vec4(vec3(totalMin.y/256),1.0f));
     }
+    memoryBarrierShared();
+    barrier();         
+    //if(finished == gl_NumWorkGroups.x*gl_NumWorkGroups.y-1)//(LF_WIDTH*LF_HEIGHT)/256 - 1)
+        if(scanID == 0) 
+            debugPrintfEXT("%d", shaderStorage.data[SHADER_STORAGE_SIZE-1]);
+        //for(int i=0; i<GROUP_SIZE*ITERATIONS; i++)  
+          //  debugPrintfEXT("%d,%d", i,shaderStorage.data[i]);
 
 /*
 //Sequential
-color = sampleImage(mapUV, 0);
 vec2 m=vec2(9999.0f);
 for(int i=0; i<256; i++)
 {
-    float shift = i*normScanStep; 
-    float dist = blockDistance(color, sampleImage(mapUV+shift, 1));
-    if(m.x > dist) m= vec2(dist, float(i));
+    vec2 variance = vec2(getVariance(i*normScanStep, pixelCoordRelative mapUV), float(i));
+    if(m.x > variance.x) m= variance;
 }
-imageStore(images[OUTPUT_TEXTURE_ID], outCoord/*16+1000*/, vec4(vec3(m.y/256),1.0f));
+imageStore(images[OUTPUT_TEXTURE_ID], outCoord*16+1000, vec4(vec3(m.y/256),1.0f));
 */
 }

@@ -5,6 +5,8 @@
 #include <fstream>
 #include <limits>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_structs.hpp>
 #include "gpuVulkan.h"
 
 #ifndef NDEBUG
@@ -17,7 +19,7 @@ void GpuVulkan::createInstance()
 {
     vk::ApplicationInfo appInfo;
     appInfo	.setPApplicationName(appName.c_str())
-        .setApiVersion(VK_MAKE_VERSION(1,0,0))
+        .setApiVersion(VK_MAKE_VERSION(1,2,19))
         .setEngineVersion(VK_MAKE_VERSION(1,0,0))
         .setApplicationVersion(VK_MAKE_VERSION(1,0,0))
         .setPEngineName(engineName.c_str());
@@ -364,9 +366,15 @@ void GpuVulkan::createDescriptorSetLayout()
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);    
     
-    std::vector<vk::DescriptorSetLayoutBinding> bindings{uboLayoutBinding, samplerLayoutBinding, imageLayoutBinding, textureLayoutBinding};
+    vk::DescriptorSetLayoutBinding ssLayoutBinding;
+    ssLayoutBinding.setBinding(bindings.shaderStorage)
+                    .setDescriptorType(vk::DescriptorType::eStorageBuffer)
+                    .setDescriptorCount(1)
+                    .setStageFlags(vk::ShaderStageFlagBits::eCompute | vk::ShaderStageFlagBits::eFragment);
     
-    std::vector<vk::DescriptorBindingFlags> bindingFlags{{}, {}, {},vk::DescriptorBindingFlagBits::eUpdateAfterBind};
+    std::vector<vk::DescriptorSetLayoutBinding> bindings{uboLayoutBinding, samplerLayoutBinding, imageLayoutBinding, textureLayoutBinding, ssLayoutBinding};
+    
+    std::vector<vk::DescriptorBindingFlags> bindingFlags{{}, {}, {},vk::DescriptorBindingFlagBits::eUpdateAfterBind, {}};
     vk::DescriptorSetLayoutBindingFlagsCreateInfo bindingInfo;
     bindingInfo.setBindingCount(bindingFlags.size());
     bindingInfo.setPBindingFlags(bindingFlags.data());
@@ -398,14 +406,28 @@ void GpuVulkan::createComputeCommandBuffers()
             vk::CommandBufferBeginInfo bufferBeginInfo;
             bufferBeginInfo .setFlags(vk::CommandBufferUsageFlagBits::eSimultaneousUse)
                 .setPInheritanceInfo({});
-
             if(submitData.commandBuffer->begin(&bufferBeginInfo) != vk::Result::eSuccess)
-                throw std::runtime_error("Compute command buffer recording couldn't begin.");
+                throw std::runtime_error("Compute command buffer recording couldn't begin."); 
+
+            if(i==0)
+            { 
+                submitData.commandBuffer->fillBuffer(*frameData.shaderStorageBuffer.buffer, 0, VK_WHOLE_SIZE, 0);
+                vk::MemoryBarrier2KHR barrier;
+                barrier.setSrcStageMask(vk::PipelineStageFlagBits2KHR::eTransfer)
+                       .setDstStageMask(vk::PipelineStageFlagBits2KHR::eComputeShader);
+                vk::DependencyInfoKHR dependencyInfo;
+                dependencyInfo.setPMemoryBarriers(&barrier)
+                              .setMemoryBarrierCount(1);                     
+ 
+                vk::DispatchLoaderDynamic instanceLoader(*instance, vkGetInstanceProcAddr);
+                submitData.commandBuffer->pipelineBarrier2KHR(dependencyInfo, instanceLoader);
+            }
+
             submitData.commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipeline));
             submitData.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipelineLayout), 0, 1, &*frameData.generalDescriptorSet, 0, {});
             std::pair<size_t, size_t> resolution{Gpu::focusMapSettings.width, Gpu::focusMapSettings.height};
             if(originalComputeShaderResolution[i])
-                resolution = {Gpu::lfInfo.width, Gpu::lfInfo.height};
+                resolution = {Gpu::lfInfo.width, Gpu::lfInfo.height}; 
             submitData.commandBuffer->dispatch(glm::ceil(resolution.first/static_cast<float>(LOCAL_SIZE_X)), glm::ceil(resolution.second/static_cast<float>(LOCAL_SIZE_Y)),1);
             submitData.commandBuffer->end();
         }
@@ -728,7 +750,10 @@ GpuVulkan::Buffer GpuVulkan::createBuffer(size_t size, vk::BufferUsageFlags usag
 void GpuVulkan::createBuffers()
 {
     for(auto &frameData : inFlightFrames.perFrameData)
+    {
         frameData.uniformBuffer = createBuffer(Gpu::uniforms.SIZE, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        frameData.shaderStorageBuffer = createBuffer(SHADER_STORAGE_SIZE, vk::BufferUsageFlagBits::eStorageBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    }
 }
 
 void GpuVulkan::updateUniforms()
@@ -756,8 +781,11 @@ void GpuVulkan::createDescriptorPool()
     vk::DescriptorPoolSize imageStoragePoolSize;
     imageStoragePoolSize   .setDescriptorCount(PerFrameData::TEXTURE_COUNT*setsNumber)
         .setType(vk::DescriptorType::eStorageImage); 
+    vk::DescriptorPoolSize ssPoolSize;
+    ssPoolSize .setDescriptorCount(setsNumber)
+        .setType(vk::DescriptorType::eStorageBuffer);  
 
-    std::vector<vk::DescriptorPoolSize> sizes{uboPoolSize, samplerPoolSize, imagePoolSize, imageStoragePoolSize};
+    std::vector<vk::DescriptorPoolSize> sizes{uboPoolSize, samplerPoolSize, imagePoolSize, imageStoragePoolSize, ssPoolSize};
 
     vk::DescriptorPoolCreateInfo createInfo;
     createInfo  .setPoolSizeCount(sizes.size())
@@ -843,6 +871,18 @@ void GpuVulkan::createDescriptorSets(PerFrameData &frameData)
         .setPImageInfo(frameData.descriptorWrite.imageInfos.data());
     frameData.descriptorWrite.writeSets.push_back(textureWriteSet);
     textureWriteSetIndex = frameData.descriptorWrite.writeSets.size()-1;
+    
+    frameData.descriptorWrite.shaderStorageInfo  .setBuffer(*frameData.shaderStorageBuffer.buffer)
+                    .setOffset(0)
+                    .setRange(SHADER_STORAGE_SIZE);
+     vk::WriteDescriptorSet ssWriteSet;
+     ssWriteSet.setDstSet(*frameData.generalDescriptorSet)
+                .setDstBinding(bindings.shaderStorage)
+                .setDstArrayElement(0)
+                .setDescriptorType(vk::DescriptorType::eStorageBuffer)
+                .setDescriptorCount(1)
+                .setPBufferInfo(&frameData.descriptorWrite.shaderStorageInfo);
+    frameData.descriptorWrite.writeSets.push_back(ssWriteSet);
 
     device->updateDescriptorSets(frameData.descriptorWrite.writeSets.size(), frameData.descriptorWrite.writeSets.data(), 0, {});     
 }
@@ -1164,7 +1204,6 @@ void GpuVulkan::updateDescriptors()
         .setPImageInfo(frameData.descriptorWrite.imageInfos.data());
     frameData.descriptorWrite.writeSets[textureWriteSetIndex] = textureWriteSet;
      
-    //device->updateDescriptorSets(frameData.descriptorWrite.writeSets.size(), frameData.descriptorWrite.writeSets.data(), 0, nullptr);
     device->updateDescriptorSets(1, &textureWriteSet, 0, nullptr);
 }
 
