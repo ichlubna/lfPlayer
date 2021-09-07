@@ -5,8 +5,6 @@
 #include <fstream>
 #include <limits>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_structs.hpp>
 #include "gpuVulkan.h"
 
 #ifndef NDEBUG
@@ -447,7 +445,7 @@ void GpuVulkan::createComputePipelines()
         computePipelines.push_back(std::make_unique<ComputePipeline>()); 
         if(!(computePipelines.back()->pipelineLayout = std::move(device->createPipelineLayoutUnique(layoutCreateInfo))))
             throw std::runtime_error("Cannot create compute pipeline layout.");
-
+        
         auto computeShader = loadShader(computeShaderPaths[i].c_str());
         vk::UniqueShaderModule computeModule = createShaderModule(computeShader); 
         vk::PipelineShaderStageCreateInfo stageCreateInfo;
@@ -498,6 +496,7 @@ void GpuVulkan::createSpecializationInfo()
             .setSize(sizeof(int32_t));
     }
     specializationInfo.setMapEntryCount(specializationEntries.size())
+        .setMapEntryCount(specializationEntries.size())
         .setPMapEntries(specializationEntries.data()) 
         .setDataSize(sizeof(int32_t)*shaderConstants.size())
         .setPData(shaderConstants.data());

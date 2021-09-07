@@ -1,4 +1,6 @@
 layout(constant_id = 0) const int MAX_TEXTURES = 10;
+layout(constant_id = 1) const int LOCAL_SIZE_X = 16;
+layout(constant_id = 2) const int LOCAL_SIZE_Y = 16;
 layout(constant_id = 3) const int LF_WIDTH = 1920;
 layout(constant_id = 4) const int LF_HEIGHT = 1080;
 layout(constant_id = 5) const float ASPECT_RATIO = 1920/1080.0f;

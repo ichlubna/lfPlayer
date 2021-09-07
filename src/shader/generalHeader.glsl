@@ -1,7 +1,6 @@
-float SAMPLE_STEP = 1.0f/SAMPLE_COUNT;
-const float rangeLimit = 0.03;
-//const float rangeLimit = 0.25;
+float rangeLimit = intBitsToFloat(shaderStorage.data[0]);
 
+float SAMPLE_STEP = 1.0f/SAMPLE_COUNT;
 float calculateFocus(int fi)
 {
     float f = fi*SAMPLE_STEP;

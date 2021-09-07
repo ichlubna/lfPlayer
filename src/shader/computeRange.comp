@@ -16,13 +16,14 @@ float normScanStep = ((LF_WIDTH/4.0f)/SCAN_RESOLUTION)/LF_WIDTH;
 
 shared vec2 groupMins[SUBGROUPS_NUM];
 shared int finished;
+shared int rangeEnd;
 
 void main()
 {
 
     uvec2 pixelCoord = gl_WorkGroupID.xy*gl_WorkGroupSize.xy;
-    if(any(greaterThan(pixelCoord,ivec2(LF_WIDTH,LF_HEIGHT))))
-        return;
+    //if(any(greaterThan(pixelCoord,ivec2(LF_WIDTH,LF_HEIGHT))))
+    //    return;
     uint scanID = gl_LocalInvocationIndex*ITERATIONS;
 
     //zkusit random prohledavani
@@ -32,7 +33,7 @@ void main()
     vec2 minVariance = vec2(99999.0f);
     for(int i=0; i<ITERATIONS; i++)
     {
-        int id = int(scanID);
+        int id = int(scanID)+i;
         vec2 variance = vec2(getVariance(id*normScanStep, pixelCoordRelative), float(id));
         if(minVariance.x>variance.x)
             minVariance = variance;
@@ -53,18 +54,35 @@ void main()
                 totalMin = groupMins[i];
       atomicAdd(shaderStorage.data[int(totalMin.y)] ,1);
       finished = atomicAdd(shaderStorage.data[SHADER_STORAGE_SIZE-1] ,1);
-      //imageStore(images[OUTPUT_TEXTURE_ID], ivec2(pixelCoord/16+500), vec4(vec3(totalMin.y/256),1.0f));
+      rangeEnd = 0;
     }
     memoryBarrierShared();
     memoryBarrier();
     memoryBarrierBuffer();
     barrier();         
 
-    if(finished == gl_NumWorkGroups.x*gl_NumWorkGroups.y-1)//(LF_WIDTH*LF_HEIGHT)/256 - 1)
+    if(finished == gl_NumWorkGroups.x*gl_NumWorkGroups.y-1)//(LF_WIDTH*LF_HEIGHT)/GROUP_SIZE - 1)
+    {
+        for(int i=0; i<ITERATIONS; i++)
+        {    
+            int id = int(scanID)+i;
+            if(id == 0 || id == SCAN_RESOLUTION-1)
+                continue;
+            ivec3 data = ivec3(shaderStorage.data[id-1], shaderStorage.data[id], shaderStorage.data[id+1]);
+            if(all(greaterThan(data,ivec3(100))))
+                atomicMax(rangeEnd, id);
+        }
+        
+        memoryBarrierShared();
+        barrier();         
+        
         if(scanID == 0) 
-            debugPrintfEXT("%d, %d", finished, shaderStorage.data[SHADER_STORAGE_SIZE-1]);
-        //for(int i=0; i<GROUP_SIZE*ITERATIONS; i++)  
-          //  debugPrintfEXT("%d,%d", i,shaderStorage.data[i]);
+            shaderStorage.data[0] = floatBitsToInt(float(rangeEnd)/SCAN_RESOLUTION);
+        //    debugPrintfEXT("%d, %d", finished, rangeEnd);
+        /*for(int i=0; i<GROUP_SIZE*ITERATIONS; i++)  
+            debugPrintfEXT("%d,%d", i,shaderStorage.data[i]);*/
+            
+    }
 
 /*
 //Sequential
