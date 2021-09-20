@@ -26,6 +26,7 @@ class Inputs
         double getMouseScroll() const;
 
         void setMousePosition(double x, double y);
+        bool mouseMoved();
         void setMouseScroll(double s);
         void press(Key key);
         void release(Key key);
@@ -69,6 +70,7 @@ class Inputs
         //expecting max 32 keys, plus possible modifiers
         long keys {0};
         double mouseX {0}, mouseY {0}, mouseScroll {0};
+        bool mouseChanged{false};
 };
 
 #endif

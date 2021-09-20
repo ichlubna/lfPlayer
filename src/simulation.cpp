@@ -39,12 +39,6 @@ Simulation::Simulation(std::string filename, float focusMapScale, int focusMapIt
     gpu->loadFrameTextures(lightfield);
 }
 
-glm::vec2 Simulation::recalculateSpeedMultiplier(glm::vec2 position)
-{
-    glm::vec2 base{position.xy()-0.5f};
-    return glm::vec2{-4.0f*(base*base)+1.0f};
-}
-
 std::vector<Gpu::LfCurrentFrame> Simulation::framesFromGrid(glm::uvec2 gridSize, glm::vec2 position)
 {
     std::vector<Gpu::LfCurrentFrame> frames;
@@ -85,38 +79,45 @@ std::vector<Gpu::LfCurrentFrame> Simulation::framesFromGrid(glm::uvec2 gridSize,
     return frames; 
 }
 
+glm::vec2 Simulation::getMouseOffset()
+{
+    Inputs::mousePosition mp = inputs->getMousePosition();
+    double relativeX = mp.x - previousX, relativeY = mp.y - previousY;    
+    previousX = mp.x, previousY = mp.y;
+    //camera->turn(relativeY*mouseSensitivity, relativeX*mouseSensitivity);
+    relativeX = relativeY = 0.0;
+    return glm::vec2(relativeX, relativeY)*mouseSensitivity;
+}
+
+glm::vec2 Simulation::recalculateSpeedMultiplier(glm::vec2 position)
+{
+    glm::vec2 base{position.xy()-0.5f};
+    return glm::vec2{-4.0f*(base*base)+1.0f};
+}
+
 void Simulation::processInputs()
 {
     inputs = window->getInputs();
-    
-    float mouseSensitivity = 0.001;
 
-    Inputs::mousePosition mp = inputs->getMousePosition();
-    double relativeX = mp.x - previousX, relativeY = mp.y - previousY;
-    previousX = mp.x, previousY = mp.y;
-    camera->position += glm::vec3(glm::vec2(relativeX, relativeY),0)*mouseSensitivity;
-    camera->clampPosition(glm::vec2(cameraBounds.x+EPS, cameraBounds.y-EPS));
-    //camera->turn(relativeY*mouseSensitivity, relativeX*mouseSensitivity);
-    relativeX = relativeY = 0.0;
-    
+    glm::vec2 posOffset = glm::vec2(0);
+    if(inputs->mouseMoved())
+        posOffset = getMouseOffset(); 
 
     if(inputs->pressedAny())
     {
-        glm::vec2 speed = cameraSpeed*recalculateSpeedMultiplier(camera->position.xy());
         if(inputs->pressed(Inputs::W))
-        {    camera->move(Camera::Direction::UP, speed.y);}
+            posOffset.y += cameraSpeed;
         if(inputs->pressed(Inputs::S))
-            camera->move(Camera::Direction::DOWN, speed.y); 
+            posOffset.y -= cameraSpeed;
         if(inputs->pressed(Inputs::A))
-            camera->move(Camera::Direction::BACK, speed.x);
+            posOffset.x += cameraSpeed;
         if(inputs->pressed(Inputs::D))
-            camera->move(Camera::Direction::FRONT, speed.x);
+            posOffset.x -= cameraSpeed;
 
         if(inputs->pressed(Inputs::LMB))
             *gpu->uniforms.focus -= 0.1f;
         if(inputs->pressed(Inputs::RMB))
             *gpu->uniforms.focus += 0.1f;
-        camera->clampPosition(glm::vec2(cameraBounds.x+EPS, cameraBounds.y-EPS));
 
         if(inputs->pressed(Inputs::Key::ESC))
             end = true;
@@ -126,11 +127,17 @@ void Simulation::processInputs()
         if(inputs->close)
             end = true;
     }
+
+        if(glm::dot( glm::vec2(0.5f)-camera->position.xy(), (camera->position.xy()+posOffset)-camera->position.xy()) < 0)
+            posOffset *= recalculateSpeedMultiplier(camera->position.xy());
+        camera->move(glm::vec3(posOffset,0));
+        camera->clampPosition(glm::vec2(cameraBounds.x+EPS, cameraBounds.y-EPS));
+
         //TODO not sure why misbehaving in the pressedAny if
         if(inputs->pressedAfterRelease(Inputs::Z))
             *gpu->uniforms.switchView ^= 1;
 }
-#include <iostream>
+
 void Simulation::run() 
 {
         *gpu->uniforms.focus = 0.0f;

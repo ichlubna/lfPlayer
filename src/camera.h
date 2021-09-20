@@ -8,6 +8,7 @@ class Camera
         //relative movement
         enum Direction{FRONT, LEFT, RIGHT, BACK, UP, DOWN};
         void move(Direction direction, float amount);
+        void move(glm::vec3 offset);
         void turn(float pitch, float yaw);
 
         glm::vec3 position{0.5f,0.5f,0.0f};

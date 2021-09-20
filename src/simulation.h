@@ -23,8 +23,10 @@ class Simulation
         double previousY{0.0};
         Inputs *inputs;
         float cameraSpeed{0.007};
+        float mouseSensitivity{0.001}; 
         glm::vec2 cameraBounds{0.0,1.0};
         glm::vec2 recalculateSpeedMultiplier(glm::vec2 position);
+        glm::vec2 getMouseOffset();
         std::vector<Gpu::LfCurrentFrame> framesFromGrid(glm::uvec2 gridSize, glm::vec2 position);
         Gpu::LfInfo lfInfo;
 };
