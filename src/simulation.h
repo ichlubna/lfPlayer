@@ -13,6 +13,7 @@ class Simulation
 		void run();
 		Simulation(std::string filename, float focusMapScale, int focusMapIterations, GpuAPI api = GPU_VULKAN, WindowAPI = WINDOW_GLFW);
 	private:
+        static constexpr float EPS{0.0001f};
         bool end{false};
 		std::unique_ptr<Window> window;
 		std::unique_ptr<Gpu> gpu;	

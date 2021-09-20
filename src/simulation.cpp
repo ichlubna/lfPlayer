@@ -8,10 +8,16 @@
 #include <iostream>
 Simulation::Simulation(std::string filename, float focusMapScale, int focusMapIterations, GpuAPI gpuApi, WindowAPI windowApi) : camera{std::make_unique<Camera>()}
 {
+    //if(std::filesystem::is_directory(filename))
+    auto lightfield = Resources::loadLightfield(filename);
+    lfInfo.width = lightfield.front().front()->width;
+    lfInfo.height = lightfield.front().front()->height;
+    lfInfo.rows = lightfield.size();
+    lfInfo.cols = lightfield.front().size();
 	switch(windowApi)
 	{
 		case WINDOW_GLFW:
-			window = std::make_unique<WindowGlfw>(1920,1080);
+			window = std::make_unique<WindowGlfw>(lfInfo.width, lfInfo.height);
 		break;
 		
 		default:
@@ -19,12 +25,6 @@ Simulation::Simulation(std::string filename, float focusMapScale, int focusMapIt
 		break;
 	}
 
-    //if(std::filesystem::is_directory(filename))
-    auto lightfield = Resources::loadLightfield(filename);
-    lfInfo.width = lightfield.front().front()->width;
-    lfInfo.height = lightfield.front().front()->height;
-    lfInfo.rows = lightfield.size();
-    lfInfo.cols = lightfield.front().size();
 	switch(gpuApi)
 	{
 		case GPU_VULKAN:
@@ -56,7 +56,7 @@ std::vector<Gpu::LfCurrentFrame> Simulation::framesFromGrid(glm::uvec2 gridSize,
     float weight{0};
     glm::vec2 offset{0,0};
     glm::ivec2 currentCoords{0,0};
-    glm::vec2 unitPos{glm::fract(position)};
+    glm::vec2 unitPos{glm::fract(gridPosition)};
 
     currentCoords = {downCoords}; 
     linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
@@ -81,20 +81,24 @@ std::vector<Gpu::LfCurrentFrame> Simulation::framesFromGrid(glm::uvec2 gridSize,
     weight = unitPos.x*unitPos.y;
     offset = gridPosition-glm::vec2(currentCoords);
     frames.push_back({linearIndex, weight, offset});
+
     return frames; 
 }
 
 void Simulation::processInputs()
 {
     inputs = window->getInputs();
-    /*
+    
     float mouseSensitivity = 0.001;
+
     Inputs::mousePosition mp = inputs->getMousePosition();
     double relativeX = mp.x - previousX, relativeY = mp.y - previousY;
     previousX = mp.x, previousY = mp.y;
-    camera->turn(relativeY*mouseSensitivity, relativeX*mouseSensitivity);
+    camera->position += glm::vec3(glm::vec2(relativeX, relativeY),0)*mouseSensitivity;
+    camera->clampPosition(glm::vec2(cameraBounds.x+EPS, cameraBounds.y-EPS));
+    //camera->turn(relativeY*mouseSensitivity, relativeX*mouseSensitivity);
     relativeX = relativeY = 0.0;
-    */
+    
 
     if(inputs->pressedAny())
     {
@@ -112,8 +116,7 @@ void Simulation::processInputs()
             *gpu->uniforms.focus -= 0.1f;
         if(inputs->pressed(Inputs::RMB))
             *gpu->uniforms.focus += 0.1f;
-        constexpr float delta{0.0001f};
-        camera->clampPosition(glm::vec2(cameraBounds.x+delta, cameraBounds.y-delta));
+        camera->clampPosition(glm::vec2(cameraBounds.x+EPS, cameraBounds.y-EPS));
 
         if(inputs->pressed(Inputs::Key::ESC))
             end = true;
@@ -127,7 +130,7 @@ void Simulation::processInputs()
         if(inputs->pressedAfterRelease(Inputs::Z))
             *gpu->uniforms.switchView ^= 1;
 }
-//#include <iostream>
+#include <iostream>
 void Simulation::run() 
 {
         *gpu->uniforms.focus = 0.0f;
@@ -136,6 +139,7 @@ void Simulation::run()
         auto startTime = std::chrono::high_resolution_clock::now();
         processInputs();
         auto frames = framesFromGrid(glm::ivec2(lfInfo.cols, lfInfo.rows),camera->position.xy());
+
         gpu->updateFrameIndices(frames);
 
         gpu->render();

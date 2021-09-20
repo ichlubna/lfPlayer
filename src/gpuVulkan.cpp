@@ -5,6 +5,7 @@
 #include <fstream>
 #include <limits>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_enums.hpp>
 #include "gpuVulkan.h"
 
 #ifndef NDEBUG
@@ -136,6 +137,11 @@ void GpuVulkan::createDevice()
 
     vk::PhysicalDeviceDescriptorIndexingFeatures indexingFeatures;
     indexingFeatures.setDescriptorBindingSampledImageUpdateAfterBind(true);
+    VkPhysicalDeviceSynchronization2FeaturesKHR syncFeatures;
+    syncFeatures.synchronization2 = true;
+    syncFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+    syncFeatures.pNext = nullptr;
+    indexingFeatures.pNext = &syncFeatures;
 
     vk::DeviceCreateInfo createInfo;
     createInfo	.setPQueueCreateInfos(queueCreateInfos)
@@ -751,7 +757,7 @@ void GpuVulkan::createBuffers()
     for(auto &frameData : inFlightFrames.perFrameData)
     {
         frameData.uniformBuffer = createBuffer(Gpu::uniforms.SIZE, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        frameData.shaderStorageBuffer = createBuffer(SHADER_STORAGE_SIZE, vk::BufferUsageFlagBits::eStorageBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        frameData.shaderStorageBuffer = createBuffer(SHADER_STORAGE_SIZE, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
     }
 }
 

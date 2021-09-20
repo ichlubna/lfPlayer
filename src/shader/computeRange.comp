@@ -78,7 +78,7 @@ void main()
         
         if(scanID == 0) 
             shaderStorage.data[0] = floatBitsToInt(float(rangeEnd)/SCAN_RESOLUTION);
-        //    debugPrintfEXT("%d, %d", finished, rangeEnd);
+            //debugPrintfEXT("%d, %f", LF_WIDTH, LF_HALF_PX_SIZE.y);
         /*for(int i=0; i<GROUP_SIZE*ITERATIONS; i++)  
             debugPrintfEXT("%d,%d", i,shaderStorage.data[i]);*/
             
