@@ -38,6 +38,11 @@ void Camera::move(Direction direction, float amount)
     }
 }
 
+void Camera::move(glm::vec3 offset)
+{
+    position += offset;
+}
+
 void Camera::clampPosition(glm::vec2 range)
 {
     position = glm::clamp(position, range.x, range.y);

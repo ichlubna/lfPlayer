@@ -4,6 +4,14 @@ void Inputs::setMousePosition(double x, double y)
 {
     mouseX = x; 
     mouseY = y; 
+    mouseChanged = true;
+}
+
+bool Inputs::mouseMoved()
+{
+    bool move = mouseChanged;
+    mouseChanged = false;
+    return move;
 }
 
 Inputs::mousePosition Inputs::getMousePosition() const
