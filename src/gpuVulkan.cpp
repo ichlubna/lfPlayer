@@ -827,6 +827,15 @@ void GpuVulkan::allocateAndCreateDescriptorSets()
                 .setSampler({});
             frameData.descriptorWrite.imageInfos.push_back(imageInfo);
         }
+        
+        for(size_t i=0; i<frameTextures.maxCount; i++)
+        {
+            vk::DescriptorImageInfo imageInfo;
+            imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                .setImageView(*frameTextures.images[i].imageView)
+                .setSampler({});
+            frameData.descriptorWrite.imageInfos.push_back(imageInfo);
+        }
  
         if(!(frameData.generalDescriptorSet = std::move(device->allocateDescriptorSetsUnique(allocInfo).front())))
             throw std::runtime_error("Cannot allocate descriptor set");
@@ -872,7 +881,7 @@ void GpuVulkan::createDescriptorSets(PerFrameData &frameData)
         .setDstBinding(bindings.textures)
         .setDstArrayElement(0)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT+frameTextures.maxCount)
         .setPImageInfo(frameData.descriptorWrite.imageInfos.data());
     frameData.descriptorWrite.writeSets.push_back(textureWriteSet);
     textureWriteSetIndex = frameData.descriptorWrite.writeSets.size()-1;
