@@ -872,7 +872,7 @@ void GpuVulkan::createDescriptorSets(PerFrameData &frameData)
         .setDstBinding(bindings.textures)
         .setDstArrayElement(0)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT)
+        .setDescriptorCount(frameData.descriptorWrite.imageInfos.size())
         .setPImageInfo(frameData.descriptorWrite.imageInfos.data());
     frameData.descriptorWrite.writeSets.push_back(textureWriteSet);
     textureWriteSetIndex = frameData.descriptorWrite.writeSets.size()-1;
@@ -1183,29 +1183,20 @@ void GpuVulkan::loadFrameTextures(Resources::ImageGrid &images)
 void GpuVulkan::updateDescriptors()
 {
     auto &frameData = inFlightFrames.currentFrame();
-    frameData.descriptorWrite.imageInfos.clear();
-    for(auto &texture : frameData.textures.images)
-    {
-        vk::DescriptorImageInfo imageInfo;
-        imageInfo   .setImageLayout(vk::ImageLayout::eGeneral)
-            .setImageView(*texture.imageView)
-            .setSampler({});
-        frameData.descriptorWrite.imageInfos.push_back(imageInfo);
-    }
-    for(const auto & frame : Gpu::currentFrames)
+    for(size_t i=0; i<Gpu::currentFrames.size(); i++)
     {
         vk::DescriptorImageInfo imageInfo;
         imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-            .setImageView(*frameTextures.images[frame.index].imageView)
+            .setImageView(*frameTextures.images[Gpu::currentFrames[i].index].imageView)
             .setSampler({});
-        frameData.descriptorWrite.imageInfos.push_back(imageInfo);
+        frameData.descriptorWrite.imageInfos[i+frameData.textures.images.size()] = imageInfo;
     }
     vk::WriteDescriptorSet textureWriteSet;
     textureWriteSet.setDstSet(*frameData.generalDescriptorSet)
         .setDstBinding(bindings.textures)
         .setDstArrayElement(0)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT)
+        .setDescriptorCount(frameData.descriptorWrite.imageInfos.size())
         .setPImageInfo(frameData.descriptorWrite.imageInfos.data());
     frameData.descriptorWrite.writeSets[textureWriteSetIndex] = textureWriteSet;
      
