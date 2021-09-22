@@ -85,7 +85,6 @@ glm::vec2 Simulation::getMouseOffset()
     double relativeX = mp.x - previousX, relativeY = mp.y - previousY;    
     previousX = mp.x, previousY = mp.y;
     //camera->turn(relativeY*mouseSensitivity, relativeX*mouseSensitivity);
-    relativeX = relativeY = 0.0;
     return glm::vec2(relativeX, relativeY)*mouseSensitivity;
 }
 
