@@ -13,8 +13,8 @@ class GpuVulkan : public Gpu
         std::string engineName{"I don't know"}; 
         std::string vertexShaderPath{"../precompiled/vertex.spv"};
         std::string fragmentShaderPath{"../precompiled/fragment.spv"};
-        inline static const std::vector<std::string> computeShaderPaths{"../precompiled/computeRange.spv", "../precompiled/computeFocusMap.spv", "../precompiled/computeLightfield.spv"};
-        inline static const std::vector<bool> originalComputeShaderResolution{true, false, false};
+        inline static const std::vector<std::string> computeShaderPaths{"../precompiled/computeRange.spv", "../precompiled/computeFocusMap.spv",  "../precompiled/computeLightfield.spv"};
+        inline static const std::vector<bool> originalComputeShaderResolution{false, false};
 
         std::vector<const char*> instanceExtensions = {"VK_KHR_surface",
                                                         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME};
@@ -81,7 +81,7 @@ class GpuVulkan : public Gpu
         class Textures
         {
             public:
-            const unsigned int maxCount{2};
+            const unsigned int maxCount{1};
             std::vector<Texture> images;
             Textures(unsigned int count) : maxCount{count}{};
         };
@@ -115,7 +115,7 @@ class GpuVulkan : public Gpu
         class PerFrameData
         {
             public:
-                static constexpr int TEXTURE_COUNT{2};
+                static constexpr int TEXTURE_COUNT{1};
                 static constexpr int LF_FRAMES_COUNT{4};
                 PipelineSync drawSync; 
                 std::vector<ComputeSubmitData> computeSubmits{computeShaderPaths.size()};
@@ -187,8 +187,8 @@ class GpuVulkan : public Gpu
 
         std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
         int textureWriteSetIndex{0};
-        static constexpr size_t SHADER_STORAGE_COUNT = 1024+1;
-        static constexpr size_t SHADER_STORAGE_SIZE = sizeof(int)*SHADER_STORAGE_COUNT;
+        size_t SHADER_STORAGE_COUNT = Gpu::lfInfo.width*Gpu::lfInfo.height*Gpu::focusMapSettings.iterations;
+        size_t SHADER_STORAGE_SIZE = sizeof(int)*SHADER_STORAGE_COUNT;
         static constexpr int WARP_SIZE{32};
         static constexpr int LOCAL_SIZE_X{WARP_SIZE/2};
         static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
@@ -199,7 +199,7 @@ class GpuVulkan : public Gpu
         float halfPxSizeY = 1.0f/(2*Gpu::lfInfo.height); 
         float mapHalfPxSizeX = 1.0f/(2*Gpu::focusMapSettings.width); 
         float mapHalfPxSizeY = 1.0f/(2*Gpu::focusMapSettings.height); 
-        std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT),
+        std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT+frameTextures.maxCount),
                                              LOCAL_SIZE_X, LOCAL_SIZE_Y,
                                              static_cast<int>(Gpu::lfInfo.width), static_cast<int>(Gpu::lfInfo.height),
                                              *reinterpret_cast<int*>(&aspect),
@@ -209,7 +209,7 @@ class GpuVulkan : public Gpu
                                              *reinterpret_cast<int*>(&mapHalfPxSizeY),
                                              static_cast<int>(Gpu::focusMapSettings.iterations),
                                              static_cast<int>(Gpu::focusMapSettings.width), static_cast<int>(Gpu::focusMapSettings.height),
-                                             SHADER_STORAGE_COUNT
+                                             static_cast<int>(SHADER_STORAGE_COUNT)
                                             }; 
         std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
         std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
