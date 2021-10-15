@@ -12,6 +12,8 @@ layout(constant_id = 10) const int SAMPLE_COUNT = 255;
 layout(constant_id = 11) const int MAP_WIDTH = 1920;
 layout(constant_id = 12) const int MAP_HEIGHT = 1080;
 layout(constant_id = 13) const int SHADER_STORAGE_SIZE = 1024;
+layout(constant_id = 14) const int LF_ROWS = 8;
+layout(constant_id = 15) const int LF_COLS = 8;
 
 vec2 LF_HALF_PX_SIZE = vec2(LF_HALF_PX_SIZE_X, LF_HALF_PX_SIZE_Y);
 vec2 MAP_HALF_PX_SIZE = vec2(MAP_HALF_PX_SIZE_X, MAP_HALF_PX_SIZE_Y);
@@ -20,6 +22,8 @@ layout(set = 0, binding = 0) uniform uniformBuffer
 {
     mat4 lfFrameAttribs;
     float focus;
+    float xPos;
+    float yPos;
     int switchView;
 } uniforms;
 
@@ -34,6 +38,7 @@ layout(set = 0, binding = 3) uniform texture2D textures[MAX_TEXTURES];
 const int OUTPUT_TEXTURE_ID = 0;
 const int FOCUSMAP_TEXTURE_ID = 1;
 const int LF_FRAME_TEXTURE_OFFSET = 2;
+const int LF_ALL_FRAMES_TEXTURE_OFFSET = 6;
 
 float lfFrameWeight(int i)
 {

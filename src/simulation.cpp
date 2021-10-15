@@ -85,7 +85,6 @@ glm::vec2 Simulation::getMouseOffset()
     double relativeX = mp.x - previousX, relativeY = mp.y - previousY;    
     previousX = mp.x, previousY = mp.y;
     //camera->turn(relativeY*mouseSensitivity, relativeX*mouseSensitivity);
-    relativeX = relativeY = 0.0;
     return glm::vec2(relativeX, relativeY)*mouseSensitivity;
 }
 
@@ -132,6 +131,8 @@ void Simulation::processInputs()
             posOffset *= recalculateSpeedMultiplier(camera->position.xy());
         camera->move(glm::vec3(posOffset,0));
         camera->clampPosition(glm::vec2(cameraBounds.x+EPS, cameraBounds.y-EPS));
+        *gpu->uniforms.xPos = camera->position.x;
+        *gpu->uniforms.yPos = camera->position.y;
 
         //TODO not sure why misbehaving in the pressedAny if
         if(inputs->pressedAfterRelease(Inputs::Z))

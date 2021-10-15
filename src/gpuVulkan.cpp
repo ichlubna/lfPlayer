@@ -1131,6 +1131,8 @@ void GpuVulkan::allocateTextures()
        
         //0 outputtext, 1 focusmap 
         frameData.textures.images[0].format = vk::Format::eR32Sfloat;
+ frameData.textures.images[0].format = vk::Format::eR8Unorm;//eR8Unorm;
+        frameData.textures.images[1].format = vk::Format::eR8G8Unorm;//eR8Unorm;
         
         allocateTextureResources(frameData.textures, vk::ImageUsageFlagBits::eStorage);
         frameData.sampler = createSampler();

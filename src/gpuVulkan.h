@@ -115,7 +115,7 @@ class GpuVulkan : public Gpu
         class PerFrameData
         {
             public:
-                static constexpr int TEXTURE_COUNT{1};
+                static constexpr int TEXTURE_COUNT{2};
                 static constexpr int LF_FRAMES_COUNT{4};
                 PipelineSync drawSync; 
                 std::vector<ComputeSubmitData> computeSubmits{computeShaderPaths.size()};
@@ -209,7 +209,10 @@ class GpuVulkan : public Gpu
                                              *reinterpret_cast<int*>(&mapHalfPxSizeY),
                                              static_cast<int>(Gpu::focusMapSettings.iterations),
                                              static_cast<int>(Gpu::focusMapSettings.width), static_cast<int>(Gpu::focusMapSettings.height),
-                                             static_cast<int>(SHADER_STORAGE_COUNT)
+                                             static_cast<int>(SHADER_STORAGE_COUNT),
+                                             static_cast<int>(lfInfo.cols),
+                                             static_cast<int>(lfInfo.rows)
+                                             
                                             }; 
         std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
         std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};

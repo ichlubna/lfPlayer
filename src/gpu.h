@@ -26,15 +26,19 @@ class Gpu
             static constexpr size_t SIZE{UNIFORM_COUNT*sizeof(int32_t)};
             const Data* getData() {return &data;};
             
-            float *focus;
-            int *switchView;
             std::array<float*, LF_ATTRIBS> lfAttribs;
+            float *focus;
+            float *xPos;
+            float *yPos;
+            int *switchView;
             
             Uniforms()
             {
                 for(auto &attrib : lfAttribs) 
                     attrib = mapFloat();
                 focus = mapFloat();
+                xPos = mapFloat();
+                yPos = mapFloat();
                 switchView = mapInt();
             };
 
