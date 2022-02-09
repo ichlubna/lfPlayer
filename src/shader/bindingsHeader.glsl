@@ -25,6 +25,7 @@ layout(set = 0, binding = 0) uniform uniformBuffer
     float xPos;
     float yPos;
     int switchView;
+    int computeMap;
 } uniforms;
 
 layout(std430, set = 0, binding = 4) buffer volatile shaderStorageBuffer
@@ -52,7 +53,10 @@ vec2 lfFrameOffset(int i)
 
 texture2D frameTexture(int i)
 {
-    //return textures[LF_ALL_FRAMES_TEXTURE_OFFSET+i];
     return textures[LF_FRAME_TEXTURE_OFFSET+i];
 }
 
+texture2D allFrameTexture(int i)
+{
+    return textures[LF_ALL_FRAMES_TEXTURE_OFFSET+i];
+}

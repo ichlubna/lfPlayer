@@ -199,7 +199,7 @@ class GpuVulkan : public Gpu
         float halfPxSizeY = 1.0f/(2*Gpu::lfInfo.height); 
         float mapHalfPxSizeX = 1.0f/(2*Gpu::focusMapSettings.width); 
         float mapHalfPxSizeY = 1.0f/(2*Gpu::focusMapSettings.height); 
-        std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT+frameTextures.maxCount),
+        std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT+frameTextures.maxCount+Gpu::lfInfo.cols*Gpu::lfInfo.rows),
                                              LOCAL_SIZE_X, LOCAL_SIZE_Y,
                                              static_cast<int>(Gpu::lfInfo.width), static_cast<int>(Gpu::lfInfo.height),
                                              *reinterpret_cast<int*>(&aspect),

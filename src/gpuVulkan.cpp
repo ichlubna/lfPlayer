@@ -366,7 +366,7 @@ void GpuVulkan::createDescriptorSetLayout()
     vk::DescriptorSetLayoutBinding textureLayoutBinding;
     textureLayoutBinding.setBinding(bindings.textures)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT)
+        .setDescriptorCount(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT+lfInfo.cols*lfInfo.rows)
         .setStageFlags(vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute)
         .setPImmutableSamplers(0);    
     
@@ -781,7 +781,7 @@ void GpuVulkan::createDescriptorPool()
     samplerPoolSize .setDescriptorCount(setsNumber)
         .setType(vk::DescriptorType::eSampler); 
     vk::DescriptorPoolSize imagePoolSize;
-    imagePoolSize   .setDescriptorCount(inFlightFrames.COUNT+(PerFrameData::TEXTURE_COUNT+frameTextures.maxCount)*setsNumber)
+    imagePoolSize   .setDescriptorCount(inFlightFrames.COUNT+(PerFrameData::TEXTURE_COUNT+frameTextures.maxCount+lfInfo.cols*lfInfo.rows)*setsNumber)
         .setType(vk::DescriptorType::eSampledImage); 
     vk::DescriptorPoolSize imageStoragePoolSize;
     imageStoragePoolSize   .setDescriptorCount(PerFrameData::TEXTURE_COUNT*setsNumber)
@@ -824,6 +824,15 @@ void GpuVulkan::allocateAndCreateDescriptorSets()
             vk::DescriptorImageInfo imageInfo;
             imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
                 .setImageView(*frameTextures.images.front().imageView)
+                .setSampler({});
+            frameData.descriptorWrite.imageInfos.push_back(imageInfo);
+        }
+        
+        for(auto &image : frameTextures.images)
+        {
+            vk::DescriptorImageInfo imageInfo;
+            imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+                .setImageView(*image.imageView)
                 .setSampler({});
             frameData.descriptorWrite.imageInfos.push_back(imageInfo);
         }
@@ -1052,7 +1061,6 @@ void GpuVulkan::transitionImageLayout(vk::Image image, vk::Format format, vk::Im
         .setSrcAccessMask(vk::AccessFlags())
         .setDstAccessMask(vk::AccessFlags());
 
-
     vk::PipelineStageFlags srcStageFlags;
     vk::PipelineStageFlags dstStageFlags;
 
@@ -1191,6 +1199,14 @@ void GpuVulkan::updateDescriptors()
             .setImageView(*frameTextures.images[Gpu::currentFrames[i].index].imageView)
             .setSampler({});
         frameData.descriptorWrite.imageInfos[i+frameData.textures.images.size()] = imageInfo;
+    }
+    for(size_t i=0; i<frameTextures.images.size(); i++)
+    {
+        vk::DescriptorImageInfo imageInfo;
+        imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+            .setImageView(*frameTextures.images[i].imageView)
+            .setSampler({});
+        frameData.descriptorWrite.imageInfos[i+frameData.textures.images.size()+Gpu::currentFrames.size()] = imageInfo;
     }
     vk::WriteDescriptorSet textureWriteSet;
     textureWriteSet.setDstSet(*frameData.generalDescriptorSet)

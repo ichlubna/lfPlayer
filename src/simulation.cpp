@@ -102,6 +102,8 @@ void Simulation::processInputs()
     if(inputs->mouseMoved())
         posOffset = getMouseOffset(); 
 
+    if(*gpu->uniforms.computeMap == 1)
+        *gpu->uniforms.computeMap = 0;
     if(inputs->pressedAny())
     {
         if(inputs->pressed(Inputs::W))
@@ -112,11 +114,20 @@ void Simulation::processInputs()
             posOffset.x += cameraSpeed;
         if(inputs->pressed(Inputs::D))
             posOffset.x -= cameraSpeed;
+        
+        if(inputs->pressed(Inputs::ENTER))
+            *gpu->uniforms.computeMap = 1;
 
         if(inputs->pressed(Inputs::LMB))
-            *gpu->uniforms.focus -= 0.1f;
+        {
+            *gpu->uniforms.focus -= 0.01f;
+            *gpu->uniforms.computeMap = 2;
+        }
         if(inputs->pressed(Inputs::RMB))
-            *gpu->uniforms.focus += 0.1f;
+        {
+            *gpu->uniforms.focus += 0.01f;
+            *gpu->uniforms.computeMap = 2;
+        }
 
         if(inputs->pressed(Inputs::Key::ESC))
             end = true;

@@ -6,25 +6,35 @@ void main()
 {
     if(any(greaterThan(outCoord,ivec2(MAP_WIDTH,MAP_HEIGHT))))
         return;
-/* 
-    float minVariance = 999.0f;
-    int minSample = 0;
-    for(int i=0; i<SAMPLE_COUNT; i++)
-    { 
-        float variance = getVariance(i);
-        if(variance < minVariance)
-        {
-            minVariance = variance;
-            minSample = i;
-        }
+
+    if(uniforms.computeMap == 2)
+    {  
+        vec2 pixel = vec2(uniforms.focus, 0);
+        imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0));
     }
-    vec2 pixel = vec2(minSample/SAMPLE_COUNT, 0);
-*/
+    else if(uniforms.computeMap == 1)
+    {
+        float minVariance = 999.0f;
+        int minSample = 0;
+        for(int i=0; i<SAMPLE_COUNT; i++)
+        { 
+            float variance = getVariance(calculateFocus(i), mapUV);
+            if(variance < minVariance)
+            {
+                minVariance = variance;
+                minSample = i;
+            }
+        }
+        vec2 pixel = vec2(float(minSample)/SAMPLE_COUNT, 0);
+        imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0));
+    }
+    
+/*
     const vec2 INIT_MIN = vec2(9999.0f, 0);
     vec2 mins[3] = {INIT_MIN, INIT_MIN, INIT_MIN};
     for(int i=0; i<SAMPLE_COUNT; i++)
     { 
-        float variance = getVariance(calculateFocus(i)*rangeLimit, mapUV);
+        float variance = getVariance(calculateFocus(i), mapUV);
         if(variance < mins[0].x)
         {
             mins[2] = mins[1];
@@ -53,6 +63,7 @@ void main()
         pixel.y = 1.0f;
 
     //pixel = vec2(mins[0].x*20);
+
     imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0));
-   
+*/   
 }

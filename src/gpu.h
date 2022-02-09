@@ -31,6 +31,7 @@ class Gpu
             float *xPos;
             float *yPos;
             int *switchView;
+            int *computeMap;
             
             Uniforms()
             {
@@ -40,6 +41,7 @@ class Gpu
                 xPos = mapFloat();
                 yPos = mapFloat();
                 switchView = mapInt();
+                computeMap = mapInt();
             };
 
         } uniforms; 

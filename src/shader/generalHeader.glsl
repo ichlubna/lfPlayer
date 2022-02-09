@@ -13,7 +13,7 @@ float calculateFocus(int fi)
     float b = -atan(-c/a);
     float d = atan((1-c)/a)+b;
     //transformed = a*tan(d*f-b)+c;
-    return transformed;
+    return transformed*rangeLimit;
 }
 
 void minmax(inout int u, inout int v)

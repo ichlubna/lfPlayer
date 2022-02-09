@@ -8,7 +8,7 @@ void main()
     
     vec4 color = vec4(0);
     vec4 pixel = texture(sampler2D(textures[FOCUSMAP_TEXTURE_ID], textSampler), mapUV);
-    int minSample = int(round(SAMPLE_COUNT*pixel.x));
+/*    int minSample = int(round(SAMPLE_COUNT*pixel.x));
 
     float invalid = pixel.y;
     for(int i=0; i<4; i++)
@@ -19,6 +19,7 @@ void main()
     color = vec4(float(minSample)/SAMPLE_COUNT); 
     //color = vec4(float(invalid>0));
     color.w = 1.0f;
-    imageStore(images[OUTPUT_TEXTURE_ID], outCoord, color);
+    imageStore(images[OUTPUT_TEXTURE_ID], outCoord, color);*/
+    imageStore(images[OUTPUT_TEXTURE_ID], outCoord, pixel);
 }
 
