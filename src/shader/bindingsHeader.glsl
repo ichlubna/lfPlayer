@@ -50,4 +50,9 @@ vec2 lfFrameOffset(int i)
     return uniforms.lfFrameAttribs[i].yz;
 }
 
+texture2D frameTexture(int i)
+{
+    //return textures[LF_ALL_FRAMES_TEXTURE_OFFSET+i];
+    return textures[LF_FRAME_TEXTURE_OFFSET+i];
+}
 
