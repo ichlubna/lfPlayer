@@ -187,7 +187,7 @@ class GpuVulkan : public Gpu
 
         std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
         int textureWriteSetIndex{0};
-        size_t SHADER_STORAGE_COUNT = Gpu::lfInfo.width*Gpu::lfInfo.height*Gpu::focusMapSettings.iterations;
+        size_t SHADER_STORAGE_COUNT = 500;
         size_t SHADER_STORAGE_SIZE = sizeof(int)*SHADER_STORAGE_COUNT;
         static constexpr int WARP_SIZE{32};
         static constexpr int LOCAL_SIZE_X{WARP_SIZE/2};
@@ -197,8 +197,8 @@ class GpuVulkan : public Gpu
         float aspect = static_cast<float>(Gpu::lfInfo.height)/Gpu::lfInfo.width;
         float halfPxSizeX = 1.0f/(2*Gpu::lfInfo.width); 
         float halfPxSizeY = 1.0f/(2*Gpu::lfInfo.height); 
-        float mapHalfPxSizeX = 1.0f/(2*Gpu::focusMapSettings.width); 
-        float mapHalfPxSizeY = 1.0f/(2*Gpu::focusMapSettings.height); 
+        float mapHalfPxSizeX = 1.0f/(2*Gpu::focusMapSettings.width);
+        float mapHalfPxSizeY = 1.0f/(2*Gpu::focusMapSettings.height);
         std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT+frameTextures.maxCount+Gpu::lfInfo.cols*Gpu::lfInfo.rows),
                                              LOCAL_SIZE_X, LOCAL_SIZE_Y,
                                              static_cast<int>(Gpu::lfInfo.width), static_cast<int>(Gpu::lfInfo.height),
@@ -211,8 +211,7 @@ class GpuVulkan : public Gpu
                                              static_cast<int>(Gpu::focusMapSettings.width), static_cast<int>(Gpu::focusMapSettings.height),
                                              static_cast<int>(SHADER_STORAGE_COUNT),
                                              static_cast<int>(lfInfo.cols),
-                                             static_cast<int>(lfInfo.rows)
-                                             
+                                             static_cast<int>(lfInfo.rows)                                             
                                             }; 
         std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
         std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};

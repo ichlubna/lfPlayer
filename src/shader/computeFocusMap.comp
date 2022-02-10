@@ -9,8 +9,8 @@ void main()
 
     if(uniforms.computeMap == 2)
     {  
-        vec2 pixel = vec2(uniforms.focus, 0);
-        imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0));
+        float pixel = uniforms.focus;
+        imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0,0));
     }
     else if(uniforms.computeMap == 1)
     {
@@ -25,8 +25,8 @@ void main()
                 minSample = i;
             }
         }
-        vec2 pixel = vec2(float(minSample)/SAMPLE_COUNT, 0);
-        imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0));
+        float pixel = float(minSample)/SAMPLE_COUNT;
+        imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0,0));
     }
     
 /*

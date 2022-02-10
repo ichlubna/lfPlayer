@@ -1012,7 +1012,6 @@ GpuVulkan::Image GpuVulkan::createImage(unsigned int width, unsigned int height,
         throw std::runtime_error("Cannot allocate image memory.");
 
     device->bindImageMemory(*image.textureImage, *image.textureImageMemory, 0);
-
     return image;
 }
 
@@ -1294,7 +1293,6 @@ void GpuVulkan::render()
         recreateSwapChain();
         return;
     }
-
     //device->waitIdle();
     inFlightFrames.switchFrame();
 }
