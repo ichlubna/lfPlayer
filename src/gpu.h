@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include "window.h"
 #include "resources.h"
 
@@ -40,19 +41,11 @@ class Gpu
 
         } uniforms; 
 
-        class LfInfo
-        {
-            public:
-            unsigned int width{1920};
-            unsigned int height{1080};
-            unsigned int rows{8};
-            unsigned int cols{8};
-        };
-
         class LfCurrentFrame
         {
             public:
-            unsigned int index{0};
+            //unsigned int index{0};
+            glm::ivec2 coords;
             float weight{0};
             glm::vec2 offset;
             bool changed{true};
@@ -66,17 +59,16 @@ class Gpu
             size_t width{1920}, height{1080};
         };
 
-        virtual void loadFrameTextures(Resources::ImageGrid &images) = 0;
         void updateFrameIndices(std::vector<LfCurrentFrame> &frames);
 		virtual void render() = 0;
-		Gpu(Window *w, LfInfo lf, FocusMapSettings fs) : windowPtr{w}, lfInfo{lf}, focusMapSettings{fs}
+		Gpu(Window *w, std::shared_ptr<Resources::FrameGrid> lf, FocusMapSettings fs) : windowPtr{w}, lightfield{lf}, focusMapSettings{fs}
         {
-            focusMapSettings.width = lfInfo.width*focusMapSettings.scale;
-            focusMapSettings.height = lfInfo.height*focusMapSettings.scale;
+            focusMapSettings.width = lightfield->width*focusMapSettings.scale;
+            focusMapSettings.height = lightfield->height*focusMapSettings.scale;
         };
 	protected:
 		Window *windowPtr;
-        LfInfo lfInfo;
+        std::shared_ptr<Resources::FrameGrid> lightfield;
         FocusMapSettings focusMapSettings;
         std::vector<LfCurrentFrame> currentFrames{4};
 };

@@ -1,0 +1,3 @@
+[submodule "src/loadingBar"]
+	path = src/loadingBar
+	url = git@github.com:ichlubna/loadingBar.git

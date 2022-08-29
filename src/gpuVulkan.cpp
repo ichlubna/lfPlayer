@@ -431,7 +431,7 @@ void GpuVulkan::createComputeCommandBuffers()
             submitData.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipelineLayout), 0, 1, &*frameData.generalDescriptorSet, 0, {});
             std::pair<size_t, size_t> resolution{Gpu::focusMapSettings.width, Gpu::focusMapSettings.height};
             if(originalComputeShaderResolution[i])
-                resolution = {Gpu::lfInfo.width, Gpu::lfInfo.height}; 
+                resolution = {Gpu::lightfield->width, Gpu::lightfield->height}; 
             submitData.commandBuffer->dispatch(glm::ceil(resolution.first/static_cast<float>(LOCAL_SIZE_X)), glm::ceil(resolution.second/static_cast<float>(LOCAL_SIZE_Y)),1);
             submitData.commandBuffer->end();
         }
@@ -781,7 +781,7 @@ void GpuVulkan::createDescriptorPool()
     samplerPoolSize .setDescriptorCount(setsNumber)
         .setType(vk::DescriptorType::eSampler); 
     vk::DescriptorPoolSize imagePoolSize;
-    imagePoolSize   .setDescriptorCount(inFlightFrames.COUNT+(PerFrameData::TEXTURE_COUNT+frameTextures.maxCount)*setsNumber)
+    imagePoolSize   .setDescriptorCount(inFlightFrames.COUNT+(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT)*setsNumber)
         .setType(vk::DescriptorType::eSampledImage); 
     vk::DescriptorPoolSize imageStoragePoolSize;
     imageStoragePoolSize   .setDescriptorCount(PerFrameData::TEXTURE_COUNT*setsNumber)
@@ -823,7 +823,7 @@ void GpuVulkan::allocateAndCreateDescriptorSets()
         {
             vk::DescriptorImageInfo imageInfo;
             imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-                .setImageView(*frameTextures.images.front().imageView)
+                .setImageView(*frameData.lfFrames.images.front().imageView)
                 .setSampler({});
             frameData.descriptorWrite.imageInfos.push_back(imageInfo);
         }
@@ -1135,15 +1135,16 @@ void GpuVulkan::allocateTextures()
         
         allocateTextureResources(frameData.textures, vk::ImageUsageFlagBits::eStorage);
         frameData.sampler = createSampler();
+
+        for(size_t i=0; i<frameData.lfFrames.maxCount; i++)
+        {
+            frameData.lfFrames.images.emplace_back();
+            auto &current = frameData.lfFrames.images.back();
+            current.width=Gpu::lightfield->width;
+            current.height=Gpu::lightfield->height;
+        }
+        allocateTextureResources(frameData.lfFrames);
     }
-    for(size_t i=0; i<frameTextures.maxCount; i++)
-    {
-        frameTextures.images.emplace_back();
-        auto &current = frameTextures.images.back();
-        current.width=Gpu::lfInfo.width;
-        current.height=Gpu::lfInfo.height;
-    }
-    allocateTextureResources(frameTextures);
 }
 
 void GpuVulkan::setTexturesLayouts()
@@ -1156,13 +1157,35 @@ void GpuVulkan::setTexturesLayouts()
         }
 }
 
-void GpuVulkan::loadFrameTextures(Resources::ImageGrid &images)
+void GpuVulkan::updateLightfieldTextures()
 {
-    if(images.size() > frameTextures.maxCount)
-        throw std::runtime_error("Not enough textures allocated for the input frames.");
-        
-    size_t size = images.front().front()->pixels.size();
+    if(Gpu::lightfield->encoding == Resources::FrameGrid::Encoding::IMG)
+        loadFrameTextures();
 
+}
+
+void GpuVulkan::loadFrameTextures()
+{
+    auto &frameData = inFlightFrames.currentFrame();
+    for(size_t i=0; i<Gpu::currentFrames.size(); i++)
+    {
+        auto const &frameInfo = Gpu::currentFrames[i];
+        if(frameInfo.changed)
+        {
+            auto const &imageData = Gpu::lightfield->dataGrid[frameInfo.coords.x][frameInfo.coords.y]; 
+            auto &imageGpu = frameData.lfFrames.images[i]; 
+            Buffer stagingBuffer = createBuffer(imageGpu.image.memorySize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            void *data;
+            if(device->mapMemory(*stagingBuffer.memory, 0, imageData.size(), vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
+                throw std::runtime_error("Cannot map memory for image upload.");
+            memcpy(data, imageData.data(), imageData.size());
+            device->unmapMemory(*stagingBuffer.memory); 
+            transitionImageLayout(*imageGpu.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+            copyBufferToImage(*stagingBuffer.buffer, *imageGpu.image.textureImage, Gpu::lightfield->width, Gpu::lightfield->height);
+            transitionImageLayout(*imageGpu.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+        }
+    }
+/*
     for(unsigned int row=0; row<images.size(); row++)
         for(unsigned int col=0; col<images.front().size(); col++)
         {
@@ -1177,17 +1200,18 @@ void GpuVulkan::loadFrameTextures(Resources::ImageGrid &images)
             transitionImageLayout(*image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
             copyBufferToImage(*stagingBuffer.buffer, *image.textureImage, images[row][col]->width, images[row][col]->height);
             transitionImageLayout(*image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-        }
+        }}8
+*/
 }
 
 void GpuVulkan::updateDescriptors()
 {
     auto &frameData = inFlightFrames.currentFrame();
-    for(size_t i=0; i<Gpu::currentFrames.size(); i++)
+    for(size_t i=0; i<frameData.lfFrames.maxCount; i++)
     {
         vk::DescriptorImageInfo imageInfo;
         imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-            .setImageView(*frameTextures.images[Gpu::currentFrames[i].index].imageView)
+            .setImageView(*frameData.lfFrames.images[i].imageView)
             .setSampler({});
         frameData.descriptorWrite.imageInfos[i+frameData.textures.images.size()] = imageInfo;
     }
@@ -1243,6 +1267,7 @@ void GpuVulkan::render()
         recreateSwapChain();
         return;
     }
+    updateLightfieldTextures();
     updateUniforms();
     updateDescriptors();
     
@@ -1308,7 +1333,7 @@ void GpuVulkan::recreateSwapChain()
     createGraphicsCommandBuffers();
 }
 
-GpuVulkan::GpuVulkan(Window* w, Gpu::LfInfo lfInfo, Gpu::FocusMapSettings fs) : Gpu(w, lfInfo, fs)
+GpuVulkan::GpuVulkan(Window* w, std::shared_ptr<Resources::FrameGrid> lf, Gpu::FocusMapSettings fs) : Gpu(w, lf, fs)
 {
     createInstance();
     selectPhysicalDevice();

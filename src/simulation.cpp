@@ -8,16 +8,11 @@
 #include <iostream>
 Simulation::Simulation(std::string filename, float focusMapScale, int focusMapIterations, GpuAPI gpuApi, WindowAPI windowApi) : camera{std::make_unique<Camera>()}
 {
-    //if(std::filesystem::is_directory(filename))
-    auto lightfield = Resources::loadLightfield(filename);
-    lfInfo.width = lightfield.front().front()->width;
-    lfInfo.height = lightfield.front().front()->height;
-    lfInfo.rows = lightfield.size();
-    lfInfo.cols = lightfield.front().size();
+    lightfield = resources.loadLightfield(filename);
 	switch(windowApi)
 	{
 		case WINDOW_GLFW:
-			window = std::make_unique<WindowGlfw>(lfInfo.width, lfInfo.height);
+			window = std::make_unique<WindowGlfw>(lightfield->width, lightfield->height);
 		break;
 		
 		default:
@@ -28,53 +23,48 @@ Simulation::Simulation(std::string filename, float focusMapScale, int focusMapIt
 	switch(gpuApi)
 	{
 		case GPU_VULKAN:
-			gpu = std::make_unique<GpuVulkan>(window.get(), lfInfo, Gpu::FocusMapSettings{focusMapScale, static_cast<size_t>(focusMapIterations)});
+			gpu = std::make_unique<GpuVulkan>(window.get(), lightfield, Gpu::FocusMapSettings{focusMapScale, static_cast<size_t>(focusMapIterations)});
 		break;
 		
 		default:
 			throw std::runtime_error("Selected GPU API not implemented.");
 		break;
 	}
-
-    gpu->loadFrameTextures(lightfield);
 }
 
 std::vector<Gpu::LfCurrentFrame> Simulation::framesFromGrid(glm::uvec2 gridSize, glm::vec2 position)
 {
+    //UDELAT ZE JSOU FURT STEJNE INDEXY A NEMENI SE
+
     std::vector<Gpu::LfCurrentFrame> frames;
     glm::vec2 gridPosition{glm::vec2(gridSize-1u)*position};
     glm::ivec2 downCoords{glm::floor(gridPosition)};
     glm::ivec2 upCoords{glm::ceil(gridPosition)};
     
-    unsigned int linearIndex(0);
     float weight{0};
     glm::vec2 offset{0,0};
     glm::ivec2 currentCoords{0,0};
     glm::vec2 unitPos{glm::fract(gridPosition)};
 
     currentCoords = {downCoords}; 
-    linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
     weight = (1-unitPos.x)*(1-unitPos.y);
     offset = gridPosition-glm::vec2(currentCoords);
-    frames.push_back({linearIndex, weight, offset});
+    frames.push_back({currentCoords, weight, offset});
    
     currentCoords = {upCoords.x, downCoords.y}; 
-    linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
     weight = unitPos.x*(1-unitPos.y);
     offset = gridPosition-glm::vec2(currentCoords);
-    frames.push_back({linearIndex, weight, offset});
+    frames.push_back({currentCoords, weight, offset});
 
     currentCoords = {downCoords.x, upCoords.y}; 
-    linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
     weight = (1-unitPos.x)*unitPos.y;
     offset = gridPosition-glm::vec2(currentCoords);
-    frames.push_back({linearIndex, weight, offset});
+    frames.push_back({currentCoords, weight, offset});
     
     currentCoords = {upCoords}; 
-    linearIndex = gridSize.x*currentCoords.y + currentCoords.x;
     weight = unitPos.x*unitPos.y;
     offset = gridPosition-glm::vec2(currentCoords);
-    frames.push_back({linearIndex, weight, offset});
+    frames.push_back({currentCoords, weight, offset});
 
     return frames; 
 }
@@ -144,7 +134,7 @@ void Simulation::run()
     {
         auto startTime = std::chrono::high_resolution_clock::now();
         processInputs();
-        auto frames = framesFromGrid(glm::ivec2(lfInfo.cols, lfInfo.rows),camera->position.xy());
+        auto frames = framesFromGrid(glm::ivec2(lightfield->cols, lightfield->rows),camera->position.xy());
 
         gpu->updateFrameIndices(frames);
 

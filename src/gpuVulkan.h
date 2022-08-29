@@ -6,7 +6,7 @@ class GpuVulkan : public Gpu
 {
 	public:
 		void render() override;
-		GpuVulkan(Window* w, Gpu::LfInfo lf, Gpu::FocusMapSettings fs);
+		GpuVulkan(Window* w, std::shared_ptr<Resources::FrameGrid> lf, Gpu::FocusMapSettings fs);
 		~GpuVulkan();
 	private: 
         std::string appName{"Lightfield Player"};
@@ -120,6 +120,7 @@ class GpuVulkan : public Gpu
                 PipelineSync drawSync; 
                 std::vector<ComputeSubmitData> computeSubmits{computeShaderPaths.size()};
                 Textures textures{TEXTURE_COUNT};
+                Textures lfFrames{LF_FRAMES_COUNT};
                 vk::UniqueDescriptorSet generalDescriptorSet; 
                 Buffer uniformBuffer;
                 Buffer shaderStorageBuffer;
@@ -163,9 +164,7 @@ class GpuVulkan : public Gpu
         } buffers;
 
         Texture depthImage;
-
-        Textures frameTextures{lfInfo.cols*lfInfo.rows};
-   
+ 
         std::vector<vk::SpecializationMapEntry> specializationEntries;
         vk::SpecializationInfo specializationInfo;
 
@@ -194,14 +193,14 @@ class GpuVulkan : public Gpu
         static constexpr int LOCAL_SIZE_Y{WARP_SIZE/2};
         static constexpr int WG_SIZE{LOCAL_SIZE_X*LOCAL_SIZE_Y};
 
-        float aspect = static_cast<float>(Gpu::lfInfo.height)/Gpu::lfInfo.width;
-        float halfPxSizeX = 1.0f/(2*Gpu::lfInfo.width); 
-        float halfPxSizeY = 1.0f/(2*Gpu::lfInfo.height); 
+        float aspect = static_cast<float>(Gpu::lightfield->height)/Gpu::lightfield->width;
+        float halfPxSizeX = 1.0f/(2*Gpu::lightfield->width); 
+        float halfPxSizeY = 1.0f/(2*Gpu::lightfield->height); 
         float mapHalfPxSizeX = 1.0f/(2*Gpu::focusMapSettings.width); 
         float mapHalfPxSizeY = 1.0f/(2*Gpu::focusMapSettings.height); 
         std::vector<int32_t> shaderConstants{static_cast<int>(PerFrameData::TEXTURE_COUNT+PerFrameData::LF_FRAMES_COUNT),
                                              LOCAL_SIZE_X, LOCAL_SIZE_Y,
-                                             static_cast<int>(Gpu::lfInfo.width), static_cast<int>(Gpu::lfInfo.height),
+                                             static_cast<int>(Gpu::lightfield->width), static_cast<int>(Gpu::lightfield->height),
                                              *reinterpret_cast<int*>(&aspect),
                                              *reinterpret_cast<int*>(&halfPxSizeX),
                                              *reinterpret_cast<int*>(&halfPxSizeY),
@@ -219,7 +218,8 @@ class GpuVulkan : public Gpu
 		std::vector<const char*> validationLayers;
 
         //TODO encapsulate to general, graphics, compute
-        void loadFrameTextures(Resources::ImageGrid &images) override;
+        void loadFrameTextures();
+        void updateLightfieldTextures();
         std::vector<char> loadShader(const char* path);
         vk::UniqueShaderModule createShaderModule(std::vector<char> source);
         void updateDescriptors();

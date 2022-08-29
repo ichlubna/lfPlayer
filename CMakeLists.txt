@@ -7,7 +7,7 @@ set(GLSLC_BINARY "glslc" CACHE PATH "Path to glslc binary to compile shaders by 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 set(SOURCES 
-src/main.cpp
+src/lfPlayerApp.cpp
 src/gpu.cpp
 src/gpuVulkan.cpp
 src/windowGlfw.cpp
@@ -17,17 +17,26 @@ src/inputs.cpp
 src/resources.cpp
 )
 
+set(SOURCES_ENCODER
+src/encoderApp.cpp
+src/encoder.cpp
+src/muxing.cpp
+src/loadingBar/loadingbar.hpp
+)
+
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(glm REQUIRED)
+find_package(FFMPEG REQUIRED)
+add_library(ffmpeg INTERFACE)
+target_link_libraries(ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
+target_include_directories(ffmpeg INTERFACE $<BUILD_INTERFACE:${FFMPEG_INCLUDE_DIRS})
+
+set(ENCODER encoder)
+add_executable(${ENCODER} ${SOURCES_ENCODER})
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PUBLIC libs)
-
-add_custom_target(run 	COMMAND ${PROJECT_NAME}
-						DEPENDS ${PROJECT_NAME}
-						WORKING_DIRECTORY ${CMAKE_PROJECT_DIR})
-
 
 set(SHADER_SRC_PATH src/shader)
 set(SHADER_COMPILATION_PATH precompiled)
@@ -52,3 +61,7 @@ endforeach()
 target_link_libraries(${PROJECT_NAME} vulkan glfw glm)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
+
+target_link_libraries(${ENCODER} ffmpeg swscale)
+target_compile_features(${ENCODER} PRIVATE cxx_std_20)
+target_compile_options(${ENCODER} PRIVATE -Wall -Wextra -pedantic)

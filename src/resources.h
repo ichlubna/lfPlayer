@@ -4,19 +4,32 @@
 
 class Resources
 {
-    public:
+    public: 
+    class FrameGrid
+    {
+       public:
+       FrameGrid(glm::uvec2 dimensions);
+       enum Encoding { IMG, H265 };
+       using DataGrid = std::vector<std::vector<std::vector<uint8_t>>>;  
+       Encoding encoding;
+       size_t width, height, channels, cols, rows;
+       DataGrid dataGrid;
+       void loadImage(std::string path, glm::uvec2 coords);
+    };
+
+    [[nodiscard]] const std::shared_ptr<FrameGrid> loadLightfield(std::string path);
+
+    private:
     class Image
     {
        public:
        int width, height, channels;
-       std::vector<char> pixels; 
+       uint8_t *pixels; 
+       ~Image(){free(pixels);};
     };
-    using ImageGrid = std::vector<std::vector<std::shared_ptr<Image>>>;  
-
-    [[nodiscard]] static std::shared_ptr<Image> loadImage(std::string path);
-    static ImageGrid loadLightfield(std::string path);
-
-    private:
-    static std::pair<int,int> parseFilename(std::string name);
+    static glm::uvec2 parseFilename(std::string name);
+    std::shared_ptr<FrameGrid> lightfield;
+    void loadImageLightfield(std::string path);
+    void loadVideoLightfield(std::string path);
 
 };

@@ -3,24 +3,35 @@
 #include <string>
 #include <filesystem>
 #include <algorithm>
+#include <iostream>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include "resources.h"
+#include "loadingBar/loadingbar.hpp"
 
-#include<iostream>
-std::shared_ptr<Resources::Image> Resources::loadImage(std::string path)
+Resources::FrameGrid::FrameGrid(glm::uvec2 dimensions) : cols{dimensions.x}, rows{dimensions.y}
 {
-    auto image = std::make_shared<Image>();
-    stbi_uc* pixels = stbi_load(path.c_str(), &(image->width), &image->height, &image->channels, STBI_rgb_alpha);
-    if(pixels == nullptr)
-        throw std::runtime_error("Cannot load image "+path);
-    image->pixels.resize(image->width*image->height*4);
-    memcpy(image->pixels.data(), pixels, image->pixels.size());
-    stbi_image_free(pixels);
-    return image;
+    dataGrid.resize(dimensions.x); 
+    for(auto &row : dataGrid)
+        row.resize(dimensions.y);
 }
 
-std::pair<int,int> Resources::parseFilename(std::string name)
+void Resources::FrameGrid::loadImage(std::string path, glm::uvec2 coords)
+{
+    auto image = std::make_unique<Image>();
+    image->pixels = stbi_load(path.c_str(), &image->width, &image->height, &image->channels, STBI_rgb_alpha);
+    if(image->pixels == nullptr)
+        throw std::runtime_error("Cannot load image "+path); 
+    size_t size = image->width*image->height*image->channels; 
+    width = image->width;
+    height = image->height;
+    channels = image->channels;
+   
+    dataGrid[coords.x][coords.y].resize(size);
+    memcpy(dataGrid[coords.x][coords.y].data(), image->pixels, size);
+}
+
+glm::uvec2 Resources::parseFilename(std::string name)
 {
     int delimiterPos = name.find('_');
     int extensionPos = name.find('.');
@@ -29,22 +40,41 @@ std::pair<int,int> Resources::parseFilename(std::string name)
     return {stoi(row), stoi(col)};
 }
 
-Resources::ImageGrid Resources::loadLightfield(std::string path)
+void Resources::loadImageLightfield(std::string path)
 {
+    std::cout << "Loading lightfield data..." << std::endl;
     std::vector<std::string> filenames;
     for (const auto & entry : std::filesystem::directory_iterator(path))
         filenames.push_back(entry.path().filename());
     std::string parentPath = std::filesystem::path(path).parent_path();
     
     std::sort(filenames.begin(), filenames.end());
-    auto dimensions = parseFilename(filenames.back());
-    std::vector<std::vector<std::shared_ptr<Image>>> images(dimensions.first+1, std::vector<std::shared_ptr<Image>>(dimensions.second+1));
+    auto dimensions = parseFilename(filenames.back()) + glm::uvec2(1);
+
+    LoadingBar bar(dimensions.x*dimensions.y);
+
+    lightfield = std::make_shared<FrameGrid>(dimensions);
     
     for (auto const &filename : filenames)
     {
         auto coords = parseFilename(filename);
-        images[coords.first][coords.second] = loadImage(parentPath+"/"+filename);
+        lightfield->loadImage(parentPath+"/"+filename, coords);
+        bar.add();
     }
-    
-    return images; 
 }
+
+void Resources::loadVideoLightfield(std::string path)
+{
+
+}
+
+const std::shared_ptr<Resources::FrameGrid> Resources::loadLightfield(std::string path)
+{
+    if(std::filesystem::is_directory(std::filesystem::path(path)))  
+        loadImageLightfield(path);
+    else
+        loadVideoLightfield(path); 
+    return lightfield; 
+}
+
+

@@ -13,8 +13,10 @@ class Simulation
 		void run();
 		Simulation(std::string filename, float focusMapScale, int focusMapIterations, GpuAPI api = GPU_VULKAN, WindowAPI = WINDOW_GLFW);
 	private:
+        Resources resources;
         static constexpr float EPS{0.0001f};
         bool end{false};
+        std::shared_ptr<Resources::FrameGrid> lightfield;
 		std::unique_ptr<Window> window;
 		std::unique_ptr<Gpu> gpu;	
 		std::unique_ptr<Camera> camera;	
@@ -28,5 +30,4 @@ class Simulation
         glm::vec2 recalculateSpeedMultiplier(glm::vec2 position);
         glm::vec2 getMouseOffset();
         std::vector<Gpu::LfCurrentFrame> framesFromGrid(glm::uvec2 gridSize, glm::vec2 position);
-        Gpu::LfInfo lfInfo;
 };
