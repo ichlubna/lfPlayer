@@ -1161,47 +1161,50 @@ void GpuVulkan::updateLightfieldTextures()
 {
     if(Gpu::lightfield->encoding == Resources::FrameGrid::Encoding::IMG)
         loadFrameTextures();
+    else
+        std::cerr << "a";
+}
 
+GpuVulkan::PerFrameData::CurrentFrame GpuVulkan::findExistingLfFrame(glm::uvec2 coords)
+{
+        for(auto const& frame : inFlightFrames.currentFrame().currentLfFrames)
+            if(frame.coords == coords)
+                return frame;
+        return {nullptr, {0,0}};
+}
+
+void GpuVulkan::loadTexture(Texture *texture, glm::vec2 resolution, const std::vector<uint8_t> *imageData)
+{
+    Buffer stagingBuffer = createBuffer(texture->image.memorySize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    void *data;
+    if(device->mapMemory(*stagingBuffer.memory, 0, imageData->size(), vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
+        throw std::runtime_error("Cannot map memory for image upload.");
+    memcpy(data, imageData->data(), imageData->size());
+    device->unmapMemory(*stagingBuffer.memory); 
+    transitionImageLayout(*texture->image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    copyBufferToImage(*stagingBuffer.buffer, *texture->image.textureImage, resolution.x, resolution.y);
+    transitionImageLayout(*texture->image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 }
 
 void GpuVulkan::loadFrameTextures()
 {
+    std::vector<PerFrameData::CurrentFrame> newCurrentLfFrames(PerFrameData::LF_FRAMES_COUNT);
     auto &frameData = inFlightFrames.currentFrame();
     for(size_t i=0; i<Gpu::currentFrames.size(); i++)
     {
         auto const &frameInfo = Gpu::currentFrames[i];
-        if(frameInfo.changed)
+        auto reusedFrame = findExistingLfFrame(frameInfo.coords);
+        if(reusedFrame.viewPtr)
+            newCurrentLfFrames[i] = reusedFrame;
+        else
         {
-            auto const &imageData = Gpu::lightfield->dataGrid[frameInfo.coords.x][frameInfo.coords.y]; 
-            auto &imageGpu = frameData.lfFrames.images[i]; 
-            Buffer stagingBuffer = createBuffer(imageGpu.image.memorySize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-            void *data;
-            if(device->mapMemory(*stagingBuffer.memory, 0, imageData.size(), vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
-                throw std::runtime_error("Cannot map memory for image upload.");
-            memcpy(data, imageData.data(), imageData.size());
-            device->unmapMemory(*stagingBuffer.memory); 
-            transitionImageLayout(*imageGpu.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-            copyBufferToImage(*stagingBuffer.buffer, *imageGpu.image.textureImage, Gpu::lightfield->width, Gpu::lightfield->height);
-            transitionImageLayout(*imageGpu.image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+            auto const &imageData = Gpu::lightfield->dataGrid[frameInfo.coords.y][frameInfo.coords.x]; 
+            auto &imageGpu = frameData.lfFrames.images[i];
+            loadTexture(&imageGpu, {Gpu::lightfield->width, Gpu::lightfield->height}, &imageData); 
+            newCurrentLfFrames[i] = {&imageGpu.imageView.get(), frameInfo.coords};
         }
     }
-/*
-    for(unsigned int row=0; row<images.size(); row++)
-        for(unsigned int col=0; col<images.front().size(); col++)
-        {
-            unsigned int linearIndex = images.front().size()*row + col;
-            auto &image = frameTextures.images[linearIndex].image;
-            Buffer stagingBuffer = createBuffer(image.memorySize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-            void *data;
-            if(device->mapMemory(*stagingBuffer.memory, 0, size, vk::MemoryMapFlags(), &data) != vk::Result::eSuccess)
-                throw std::runtime_error("Cannot map memory for image upload.");
-            memcpy(data, images[row][col]->pixels.data(), size);
-            device->unmapMemory(*stagingBuffer.memory); 
-            transitionImageLayout(*image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-            copyBufferToImage(*stagingBuffer.buffer, *image.textureImage, images[row][col]->width, images[row][col]->height);
-            transitionImageLayout(*image.textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-        }}8
-*/
+    frameData.currentLfFrames = newCurrentLfFrames;
 }
 
 void GpuVulkan::updateDescriptors()
@@ -1211,7 +1214,7 @@ void GpuVulkan::updateDescriptors()
     {
         vk::DescriptorImageInfo imageInfo;
         imageInfo   .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-            .setImageView(*frameData.lfFrames.images[i].imageView)
+            .setImageView(*frameData.currentLfFrames[i].viewPtr)
             .setSampler({});
         frameData.descriptorWrite.imageInfos[i+frameData.textures.images.size()] = imageInfo;
     }

@@ -44,11 +44,9 @@ class Gpu
         class LfCurrentFrame
         {
             public:
-            //unsigned int index{0};
             glm::ivec2 coords;
             float weight{0};
             glm::vec2 offset;
-            bool changed{true};
         };
 
         class FocusMapSettings

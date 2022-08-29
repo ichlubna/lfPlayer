@@ -1,5 +1,6 @@
 #include <memory>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_handles.hpp>
 #include "gpu.h"
 
 class GpuVulkan : public Gpu
@@ -121,6 +122,15 @@ class GpuVulkan : public Gpu
                 std::vector<ComputeSubmitData> computeSubmits{computeShaderPaths.size()};
                 Textures textures{TEXTURE_COUNT};
                 Textures lfFrames{LF_FRAMES_COUNT};
+
+                class CurrentFrame
+                {
+                    public:
+                        vk::ImageView* viewPtr = nullptr;
+                        glm::uvec2 coords; 
+                };
+                std::vector<CurrentFrame> currentLfFrames;
+                
                 vk::UniqueDescriptorSet generalDescriptorSet; 
                 Buffer uniformBuffer;
                 Buffer shaderStorageBuffer;
@@ -249,6 +259,8 @@ class GpuVulkan : public Gpu
         void createPipelineSync();
         void allocateTextureResources(Textures &textures, vk::ImageUsageFlags usageFlags);
         void allocateTextures();
+        PerFrameData::CurrentFrame findExistingLfFrame(glm::uvec2 coords);
+        void loadTexture(Texture *texture, glm::vec2 resolution, const std::vector<uint8_t> *imageData);
         void setTexturesLayouts();
         Image createImage(unsigned int width, unsigned int height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties);
         vk::UniqueImageView createImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags);

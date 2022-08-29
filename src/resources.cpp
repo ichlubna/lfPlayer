@@ -9,7 +9,7 @@
 #include "resources.h"
 #include "loadingBar/loadingbar.hpp"
 
-Resources::FrameGrid::FrameGrid(glm::uvec2 dimensions) : cols{dimensions.x}, rows{dimensions.y}
+Resources::FrameGrid::FrameGrid(glm::uvec2 dimensions, Encoding format) : encoding{format}, cols{dimensions.x}, rows{dimensions.y}
 {
     dataGrid.resize(dimensions.x); 
     for(auto &row : dataGrid)
@@ -22,7 +22,7 @@ void Resources::FrameGrid::loadImage(std::string path, glm::uvec2 coords)
     image->pixels = stbi_load(path.c_str(), &image->width, &image->height, &image->channels, STBI_rgb_alpha);
     if(image->pixels == nullptr)
         throw std::runtime_error("Cannot load image "+path); 
-    size_t size = image->width*image->height*image->channels; 
+    size_t size = image->width*image->height*4;//image->channels; 
     width = image->width;
     height = image->height;
     channels = image->channels;
@@ -53,7 +53,7 @@ void Resources::loadImageLightfield(std::string path)
 
     LoadingBar bar(dimensions.x*dimensions.y);
 
-    lightfield = std::make_shared<FrameGrid>(dimensions);
+    lightfield = std::make_shared<FrameGrid>(dimensions, Resources::FrameGrid::Encoding::IMG);
     
     for (auto const &filename : filenames)
     {

@@ -8,8 +8,8 @@ class Resources
     class FrameGrid
     {
        public:
-       FrameGrid(glm::uvec2 dimensions);
        enum Encoding { IMG, H265 };
+       FrameGrid(glm::uvec2 dimensions, Encoding format);
        using DataGrid = std::vector<std::vector<std::vector<uint8_t>>>;  
        Encoding encoding;
        size_t width, height, channels, cols, rows;

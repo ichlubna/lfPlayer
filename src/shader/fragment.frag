@@ -21,5 +21,4 @@ void main()
         outColor = vec4(float(minSample)/SAMPLE_COUNT);
         outColor.w = 1.0f;
     }
-    outColor = texture(sampler2D(textures[2], textSampler),uv);
 }

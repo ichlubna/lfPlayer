@@ -135,7 +135,6 @@ void Simulation::run()
         auto startTime = std::chrono::high_resolution_clock::now();
         processInputs();
         auto frames = framesFromGrid(glm::ivec2(lightfield->cols, lightfield->rows),camera->position.xy());
-
         gpu->updateFrameIndices(frames);
 
         gpu->render();
