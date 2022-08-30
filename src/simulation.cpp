@@ -6,7 +6,7 @@
 #include "windowGlfw.h"
 
 #include <iostream>
-Simulation::Simulation(std::string filename, float focusMapScale, int focusMapIterations, GpuAPI gpuApi, WindowAPI windowApi) : camera{std::make_unique<Camera>()}
+Simulation::Simulation(std::string filename, float focusMapScale, size_t focusMapIterations, GpuAPI gpuApi, WindowAPI windowApi) : camera{std::make_unique<Camera>()}
 {
     lightfield = resources.loadLightfield(filename);
 	switch(windowApi)

@@ -11,7 +11,7 @@ class Simulation
 		enum WindowAPI {WINDOW_GLFW};
 
 		void run();
-		Simulation(std::string filename, float focusMapScale, int focusMapIterations, GpuAPI api = GPU_VULKAN, WindowAPI = WINDOW_GLFW);
+		Simulation(std::string filename, float focusMapScale, size_t focusMapIterations, GpuAPI api = GPU_VULKAN, WindowAPI = WINDOW_GLFW);
 	private:
         Resources resources;
         static constexpr float EPS{0.0001f};

@@ -1,3 +1,4 @@
+#include "glm/glm.hpp"
 #include <vector>
 #include <string>
 
@@ -9,7 +10,7 @@ class Muxing
         public:   
         EncodedData(){}; 
         void addData(const std::vector<uint8_t> *packetData);
-        void initHeader(std::pair<uint32_t, uint32_t>resolution, uint32_t count);
+        void initHeader(glm::uvec2 resolution, uint32_t rows, uint32_t cols);
         std::vector<uint32_t> header;
         std::vector<uint8_t> packets;
         std::vector<uint32_t> offsets;
@@ -19,7 +20,7 @@ class Muxing
     class Muxer
     {
         public:
-        Muxer(std::pair<uint32_t, uint32_t>resolution, uint32_t count) {data.initHeader(resolution, count);};
+        Muxer(glm::uvec2 resolution, glm::uvec2 rowsCols) {data.initHeader(resolution, rowsCols.x, rowsCols.y);};
         friend void operator<<(Muxer &m, const std::vector<uint8_t> *packet){m.addPacket(packet);};
         void save(std::string filePath);
 
@@ -35,8 +36,8 @@ class Muxing
 
         private:
         EncodedData data;
-        std::pair<uint32_t, uint32_t> resolution;
-        uint32_t count;
+        glm::uvec2 resolution;
+        uint32_t rows, cols;
     };
 
     private:

@@ -15,13 +15,18 @@ src/simulation.cpp
 src/camera.cpp
 src/inputs.cpp
 src/resources.cpp
+src/analyzer.cpp
+src/loadingBar/loadingbar.hpp
+src/arguments/arguments.hpp
 )
 
 set(SOURCES_ENCODER
-src/encoderApp.cpp
+src/lfEncoderApp.cpp
 src/encoder.cpp
 src/muxing.cpp
 src/loadingBar/loadingbar.hpp
+src/analyzer.cpp
+src/arguments/arguments.hpp
 )
 
 find_package(Vulkan REQUIRED)
@@ -32,7 +37,7 @@ add_library(ffmpeg INTERFACE)
 target_link_libraries(ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
 target_include_directories(ffmpeg INTERFACE $<BUILD_INTERFACE:${FFMPEG_INCLUDE_DIRS})
 
-set(ENCODER encoder)
+set(ENCODER lfEncoder)
 add_executable(${ENCODER} ${SOURCES_ENCODER})
 
 add_executable(${PROJECT_NAME} ${SOURCES})

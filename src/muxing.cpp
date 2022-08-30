@@ -8,6 +8,12 @@ void Muxing::EncodedData::addData(const std::vector<uint8_t> *packetData)
     packets.insert(packets.end(), packetData->begin(), packetData->end());
 }
 
+void Muxing::EncodedData::initHeader(glm::uvec2 resolution, uint32_t rows, uint32_t cols)
+{
+    referenceIndex = (rows*cols)/2;
+    header={resolution.x, resolution.y, rows, cols, referenceIndex};
+}
+
 void Muxing::Muxer::save(std::string filePath)
 {
     data.offsets.push_back(data.packets.size());
@@ -27,19 +33,16 @@ Muxing::Demuxer::Demuxer(std::string filePath)
 {
     std::ifstream fis(filePath, std::ios::binary);
     constexpr size_t BYTE_COUNT{4};
-    fis.read(reinterpret_cast<char*>(&resolution.first), BYTE_COUNT);
-    fis.read(reinterpret_cast<char*>(&resolution.second), BYTE_COUNT);
-    fis.read(reinterpret_cast<char*>(&count), BYTE_COUNT);
-    data.initHeader(resolution, count);
-   
+    fis.read(reinterpret_cast<char*>(&resolution.x), BYTE_COUNT);
+    fis.read(reinterpret_cast<char*>(&resolution.y), BYTE_COUNT);
+    fis.read(reinterpret_cast<char*>(&rows), BYTE_COUNT); 
+    fis.read(reinterpret_cast<char*>(&cols), BYTE_COUNT);
+    data.initHeader(resolution, rows, cols);
+  
+    size_t count = rows*cols; 
     data.offsets.resize(count); 
     fis.read(reinterpret_cast<char*>(data.offsets.data()), count*BYTE_COUNT);    
     fis.read(reinterpret_cast<char*>(data.packets.data()), data.offsets.back());
 }
 
-void Muxing::EncodedData::initHeader(std::pair<uint32_t, uint32_t>resolution, uint32_t count)
-{
-    header={resolution.first, resolution.second, count};
-    referenceIndex = count/2;
-}
 
