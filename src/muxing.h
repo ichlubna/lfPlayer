@@ -10,17 +10,22 @@ class Muxing
         public:   
         EncodedData(){}; 
         void addData(const std::vector<uint8_t> *packetData);
-        void initHeader(glm::uvec2 resolution, uint32_t rows, uint32_t cols);
+        void initHeader(glm::uvec2 resolution, glm::uvec2 colsRows, glm::uvec2 reference, uint32_t format);
         std::vector<uint32_t> header;
         std::vector<uint8_t> packets;
         std::vector<uint32_t> offsets;
-        uint32_t referenceIndex;
+        static constexpr size_t HEADER_VALUES_COUNT{7};
+        glm::uvec2 resolution(){return {header[0], header[1]};}
+        glm::uvec2 colsRows(){return {header[2], header[3]};}
+        glm::uvec2 referencePosition(){return {header[4], header[5]};}
+        uint32_t format(){return header[6];}
+        size_t frameCount(){return colsRows().x*colsRows().y;}
     };
 
     class Muxer
     {
         public:
-        Muxer(glm::uvec2 resolution, glm::uvec2 rowsCols) {data.initHeader(resolution, rowsCols.x, rowsCols.y);};
+        Muxer(glm::uvec2 resolution, glm::uvec2 colsRows, glm::uvec2 reference, uint32_t format) {data.initHeader(resolution, colsRows, reference, format);};
         friend void operator<<(Muxer &m, const std::vector<uint8_t> *packet){m.addPacket(packet);};
         void save(std::string filePath);
 
@@ -33,11 +38,11 @@ class Muxing
     {
         public:
         Demuxer(std::string filePath);
+       // friend void operator<<(Muxer &m, const std::vector<uint8_t> *packet){m.addPacket(packet);};
 
         private:
         EncodedData data;
-        glm::uvec2 resolution;
-        uint32_t rows, cols;
+        
     };
 
     private:

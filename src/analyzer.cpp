@@ -5,11 +5,11 @@ const std::set<std::filesystem::path> Analyzer::listPath(std::string path)
     auto dir = std::filesystem::directory_iterator(path); 
     std::set<std::filesystem::path> sorted;
     for(const auto &file : dir)
-        sorted.insert(file);
+        sorted.insert(file.path().filename());
     return sorted;
 }
 
-const glm::uvec2 Analyzer::parseFilename(std::string name)
+glm::uvec2 Analyzer::parseFilename(std::string name)
 {
     int delimiterPos = name.find('_');
     int extensionPos = name.find('.');

@@ -13,7 +13,7 @@ class Encoder
     void encode(std::string inputFolder, std::string outputFile, float quality, std::string format) const;
     const std::vector<uint8_t> extractPacketData(AVPacket *packet) const;
     static const AVPixelFormat outputPixelFormat{AV_PIX_FMT_YUV444P};
-    enum StreamFormat{ H265, AV1 };
+    enum StreamFormat{ H265=0, AV1=1 };
 
     private:
     class FFEncoder

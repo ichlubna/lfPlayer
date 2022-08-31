@@ -13,7 +13,7 @@ int main(int argc, char **argv)
     std::string path = static_cast<std::string>(args["-i"]);
     size_t iterations = static_cast<size_t>(args["-q"]);
     float scale = static_cast<float>(args["-s"]);
- 
+
     std::string helpText{ "Usage:\n"
              "Example: lfPlayer -i /MyAmazingMachine/thatScene.lf -s 1.0 -q 256\n"  
              "-i - folder with lf images or video-encoded .lf file using lfEncoder app\n"
@@ -36,7 +36,7 @@ int main(int argc, char **argv)
     if(iterations == 0)
         iterations = DEFAULT_ITERATIONS;
 
-	try
+    try
 	{
 		Simulation simulation(path, scale, iterations);
 		simulation.run();

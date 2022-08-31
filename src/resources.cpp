@@ -34,10 +34,9 @@ void Resources::FrameGrid::loadImage(std::string path, glm::uvec2 coords)
 
 void Resources::loadImageLightfield(std::string path)
 {
-    std::cout << "Loading lightfield data..." << std::endl;
     auto filenames = Analyzer::listPath(path);
     std::string parentPath = std::filesystem::path(path).parent_path();
-    auto dimensions = Analyzer::parseFilename(*filenames.rbegin()) + glm::uvec2(1);
+    auto dimensions = Analyzer::parseFilename(*(--filenames.end())) + glm::uvec2(1);
 
     LoadingBar bar(dimensions.x*dimensions.y);
 
@@ -58,6 +57,7 @@ void Resources::loadVideoLightfield(std::string path)
 
 const std::shared_ptr<Resources::FrameGrid> Resources::loadLightfield(std::string path)
 {
+    std::cout << "Loading lightfield data..." << std::endl;
     if(Analyzer::isDir(path))  
         loadImageLightfield(path);
     else

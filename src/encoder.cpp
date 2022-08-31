@@ -48,29 +48,36 @@ Encoder::StreamFormat Encoder::stringToFormat(std::string format) const
 void Encoder::encode(std::string inputFolder, std::string outputFile, float quality, std::string format) const
 {
     auto files = Analyzer::listPath(inputFolder);
+    auto lastFileCoords = Analyzer::parseFilename(*files.rbegin()) + glm::uvec2(1);
+    auto colsRows = lastFileCoords + glm::uvec2(1);
+    auto referenceCoords = lastFileCoords/2u;
     auto videoFormat = stringToFormat(format);
     size_t crf = calculateCrf(videoFormat, quality);
 
     std::cout << "Encoding..." << std::endl;
     LoadingBar bar(files.size()+1, true);
     bar.print();
-
+ 
+    size_t referenceIndex = referenceCoords.y * colsRows.x + referenceCoords.x; 
     std::set<std::filesystem::path>::iterator it = files.begin(); 
-    std::advance(it, files.size()/2);    
+    std::advance(it, referenceIndex);
     std::string referenceFrame = *it;
     PairEncoder refFrame(referenceFrame, referenceFrame, crf, videoFormat);
     auto resolution = refFrame.getResolution();
-    auto dimensions = Analyzer::parseFilename(*files.rbegin()) + glm::uvec2(1);
 
-    Muxing::Muxer muxer{resolution, dimensions};
-    muxer << refFrame.getReferencePacket();
+    Muxing::Muxer muxer{resolution, colsRows, referenceCoords, videoFormat};
     for(auto const &file : files)
-        if(referenceFrame != file)
-        {
+    if(referenceFrame == file)
+    {
+        muxer << refFrame.getReferencePacket();
+        bar.add();
+    }
+    else
+    {
             PairEncoder newFrame(referenceFrame, file, crf, videoFormat);
             bar.add();
             muxer << newFrame.getFramePacket();
-        }
+    }
     muxer.save(outputFile); 
 }
 
