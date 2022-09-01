@@ -9,10 +9,10 @@
 #include "welfordHeader.glsl"
 
 const int GROUP_SIZE = 256; //(gl_WorkGroupSize.x*gl_WorkGroupSize.y)
-const int SUBGROUPS_NUM = 256/32; //(gl_WorkGroupSize.x*gl_WorkGroupSize.y)/gl_SubgroupSize
+const int SUBGROUPS_NUM = 256 / 32; //(gl_WorkGroupSize.x*gl_WorkGroupSize.y)/gl_SubgroupSize
 const int ITERATIONS = 1;
-const int SCAN_RESOLUTION = GROUP_SIZE*ITERATIONS;
-float normScanStep = ((LF_WIDTH/4.0f)/SCAN_RESOLUTION)/LF_WIDTH;
+const int SCAN_RESOLUTION = GROUP_SIZE * ITERATIONS;
+float normScanStep = ((LF_WIDTH / 4.0f) / SCAN_RESOLUTION) / LF_WIDTH;
 
 shared vec2 groupMins[SUBGROUPS_NUM];
 shared int finished;
@@ -21,77 +21,77 @@ shared int rangeEnd;
 void main()
 {
 
-    uvec2 pixelCoord = gl_WorkGroupID.xy*gl_WorkGroupSize.xy;
+    uvec2 pixelCoord = gl_WorkGroupID.xy * gl_WorkGroupSize.xy;
     //if(any(greaterThan(pixelCoord,ivec2(LF_WIDTH,LF_HEIGHT))))
     //    return;
-    uint scanID = gl_LocalInvocationIndex*ITERATIONS;
+    uint scanID = gl_LocalInvocationIndex * ITERATIONS;
 
     //zkusit random prohledavani
     //TODO offset od kraje
-    vec2 pixelCoordRelative = vec2(pixelCoord)/vec2(LF_WIDTH, LF_HEIGHT);
+    vec2 pixelCoordRelative = vec2(pixelCoord) / vec2(LF_WIDTH, LF_HEIGHT);
 
     vec2 minVariance = vec2(99999.0f);
-    for(int i=0; i<ITERATIONS; i++)
+    for(int i = 0; i < ITERATIONS; i++)
     {
-        int id = int(scanID)+i;
-        vec2 variance = vec2(getVariance(id*normScanStep, pixelCoordRelative), float(id));
-        if(minVariance.x>variance.x)
+        int id = int(scanID) + i;
+        vec2 variance = vec2(getVariance(id * normScanStep, pixelCoordRelative), float(id));
+        if(minVariance.x > variance.x)
             minVariance = variance;
     }
     float groupMin = minVariance.x;
-    groupMin=subgroupMin(groupMin);
+    groupMin = subgroupMin(groupMin);
     if(groupMin == minVariance.x)
         groupMins[gl_SubgroupID] = minVariance;
-    
-    memoryBarrierShared();
-    barrier();         
 
-    if(scanID==0)
+    memoryBarrierShared();
+    barrier();
+
+    if(scanID == 0)
     {
         vec2 totalMin = vec2(9999.0f);
-        for(int i=0; i<SUBGROUPS_NUM; i++)
+        for(int i = 0; i < SUBGROUPS_NUM; i++)
             if(groupMins[i].x < totalMin.x)
                 totalMin = groupMins[i];
-      atomicAdd(shaderStorage.data[int(totalMin.y)] ,1);
-      finished = atomicAdd(shaderStorage.data[SHADER_STORAGE_SIZE-1] ,1);
-      rangeEnd = 0;
+        atomicAdd(shaderStorage.data[int(totalMin.y)], 1);
+        finished = atomicAdd(shaderStorage.data[SHADER_STORAGE_SIZE - 1], 1);
+        rangeEnd = 0;
     }
     memoryBarrierShared();
     memoryBarrier();
     memoryBarrierBuffer();
-    barrier();         
+    barrier();
 
-    if(finished == gl_NumWorkGroups.x*gl_NumWorkGroups.y-1)//(LF_WIDTH*LF_HEIGHT)/GROUP_SIZE - 1)
+    if(finished == gl_NumWorkGroups.x * gl_NumWorkGroups.y - 1) //(LF_WIDTH*LF_HEIGHT)/GROUP_SIZE - 1)
     {
-        for(int i=0; i<ITERATIONS; i++)
-        {    
-            int id = int(scanID)+i;
-            if(id == 0 || id == SCAN_RESOLUTION-1)
+        for(int i = 0; i < ITERATIONS; i++)
+        {
+            int id = int(scanID) + i;
+            if(id == 0 || id == SCAN_RESOLUTION - 1)
                 continue;
-            ivec3 data = ivec3(shaderStorage.data[id-1], shaderStorage.data[id], shaderStorage.data[id+1]);
-            if(all(greaterThan(data,ivec3(100))))
+            ivec3 data = ivec3(shaderStorage.data[id - 1], shaderStorage.data[id], shaderStorage.data[id + 1]);
+            if(all(greaterThan(data, ivec3(100))))
                 atomicMax(rangeEnd, id);
         }
-        
+
         memoryBarrierShared();
-        barrier();         
-        
-        if(scanID == 0) 
-            shaderStorage.data[0] = floatBitsToInt(float(rangeEnd)/SCAN_RESOLUTION);
-            //debugPrintfEXT("%d, %f", LF_WIDTH, LF_HALF_PX_SIZE.y);
-        /*for(int i=0; i<GROUP_SIZE*ITERATIONS; i++)  
+        barrier();
+
+        if(scanID == 0)
+            shaderStorage.data[0] = floatBitsToInt(float(rangeEnd) / SCAN_RESOLUTION);
+        //debugPrintfEXT("%d, %f", LF_WIDTH, LF_HALF_PX_SIZE.y);
+        /*for(int i=0; i<GROUP_SIZE*ITERATIONS; i++)
             debugPrintfEXT("%d,%d", i,shaderStorage.data[i]);*/
-            
+
     }
 
-/*
-//Sequential
-vec2 m=vec2(9999.0f);
-for(int i=0; i<256; i++)
-{
-    vec2 variance = vec2(getVariance(i*normScanStep, pixelCoordRelative mapUV), float(i));
-    if(m.x > variance.x) m= variance;
-}
-imageStore(images[OUTPUT_TEXTURE_ID], outCoord*16+1000, vec4(vec3(m.y/256),1.0f));
-*/
+    /*
+    //Sequential
+    vec2 m=vec2(9999.0f);
+    for(int i=0; i<256; i++)
+    {
+        vec2 variance = vec2(getVariance(i*normScanStep, pixelCoordRelative mapUV), float(i));
+        if(m.x > variance.x) m= variance;
+    }
+    imageStore(images[OUTPUT_TEXTURE_ID], outCoord*16+1000, vec4(vec3(m.y/256),1.0f));
+    */
 }

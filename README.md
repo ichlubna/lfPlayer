@@ -36,12 +36,12 @@ _lfEncoder -i /MyAmazingMachine/thoseImages -q 1.0 -f H265 -o ./coolFile.lf_
 The file is in binary format with _.lf_ extension and consists of:  
 HEADER **|** OFFSETS **|** PACKETS
 
-Header consists of 32-bit unsigned int values:  
+HEADER consists of 32-bit unsigned int values:  
 IMAGE WIDTH [PX] **|** IMAGE HEIGHT [PX] **|** GRID COLUMNS [IMAGES] **|** GRID ROWS [IMAGES] **|** KEY FRAME POSITION X [IMAGES] **|** KEY FRAME POSITION Y [IMAGES] **|** VIDEO FORMAT (0 = H265, 1 = AV1)
 
-Offsets is an array of 32-bit unsigned int values indicating the beginning of the given packet in the file. Example: offsets[0] is the byte address of the first packet data in the file.
+OFFSETS is an array of 32-bit unsigned int values indicating the beginning of the given packet in the PACKETS section. Example: offsets[0] is the byte address of the first packet data in the file.
 
-Packets is a byte array containing the video packets data. The packets are stored in column-major order so the packets from the grid are stored as:  
+PACKETS is a byte array containing the video packets data. The packets are stored in column-major order so the packets from the grid are stored as:  
 0\_0 **|** 1\_0 **|** 2\_0 **|** ... **|** 0\_1 **|** 0\_2 **|** ...
 
 # Related publications

@@ -1,6 +1,6 @@
 [submodule "src/loadingBar"]
-	path = src/loadingBar
+	path = src/libs/loadingBar
 	url = git@github.com:ichlubna/loadingBar.git
 [submodule "src/arguments"]
-	path = src/arguments
+	path = src/libs/arguments
 	url = git@github.com:ichlubna/arguments.git

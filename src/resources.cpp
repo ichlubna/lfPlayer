@@ -8,26 +8,27 @@
 #include <stb_image.h>
 #include "resources.h"
 #include "analyzer.h"
-#include "loadingBar/loadingbar.hpp"
+#include "muxing.h"
+#include "libs/loadingBar/loadingbar.hpp"
 
-Resources::FrameGrid::FrameGrid(glm::uvec2 dimensions, Encoding format) : encoding{format}, cols{dimensions.x}, rows{dimensions.y}
+void Resources::FrameGrid::initGrid()
 {
-    dataGrid.resize(dimensions.x); 
+    dataGrid.resize(colsRows.x);
     for(auto &row : dataGrid)
-        row.resize(dimensions.y);
+        row.resize(colsRows.y);
 }
+
 
 void Resources::FrameGrid::loadImage(std::string path, glm::uvec2 coords)
 {
     auto image = std::make_unique<Image>();
     image->pixels = stbi_load(path.c_str(), &image->width, &image->height, &image->channels, STBI_rgb_alpha);
     if(image->pixels == nullptr)
-        throw std::runtime_error("Cannot load image "+path); 
-    size_t size = image->width*image->height*4;//image->channels; 
-    width = image->width;
-    height = image->height;
+        throw std::runtime_error("Cannot load image " + path);
+    size_t size = image->width * image->height * 4; //image->channels;
+    resolution = {image->width, image->height};
     channels = image->channels;
-   
+
     dataGrid[coords.x][coords.y].resize(size);
     memcpy(dataGrid[coords.x][coords.y].data(), image->pixels, size);
 }
@@ -38,31 +39,44 @@ void Resources::loadImageLightfield(std::string path)
     std::string parentPath = std::filesystem::path(path).parent_path();
     auto dimensions = Analyzer::parseFilename(*(--filenames.end())) + glm::uvec2(1);
 
-    LoadingBar bar(dimensions.x*dimensions.y);
+    LoadingBar bar(dimensions.x * dimensions.y);
 
     lightfield = std::make_shared<FrameGrid>(dimensions, Resources::FrameGrid::Encoding::IMG);
-    
-    for (auto const &filename : filenames)
+
+    for(auto const &filename : filenames)
     {
         auto coords = Analyzer::parseFilename(filename);
-        lightfield->loadImage(parentPath+"/"+filename.string(), coords);
+        lightfield->loadImage(parentPath + "/" + filename.string(), coords);
         bar.add();
     }
 }
 
+Resources::FrameGrid::Encoding Resources::numberToFormat(size_t number)
+{
+    if(number == 0)
+        return Resources::FrameGrid::Encoding::H265;
+    else
+        return Resources::FrameGrid::Encoding::AV1;
+}
+
 void Resources::loadVideoLightfield(std::string path)
 {
-
+    Muxing::Demuxer demuxer(path);
+    LoadingBar bar(demuxer.data.colsRows().x * demuxer.data.colsRows().y);
+    lightfield = std::make_shared<FrameGrid>(demuxer.data.colsRows(), demuxer.data.resolution(), demuxer.data.referencePosition(), numberToFormat(demuxer.data.format()));
+    for(auto &col : lightfield->dataGrid)
+        for(auto &row : col)
+            row << demuxer;
 }
 
 const std::shared_ptr<Resources::FrameGrid> Resources::loadLightfield(std::string path)
 {
     std::cout << "Loading lightfield data..." << std::endl;
-    if(Analyzer::isDir(path))  
+    if(Analyzer::isDir(path))
         loadImageLightfield(path);
     else
-        loadVideoLightfield(path); 
-    return lightfield; 
+        loadVideoLightfield(path);
+    return lightfield;
 }
 
 

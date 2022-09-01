@@ -4,6 +4,8 @@ set(${PROJECT_NAME}_VERSION_MAJOR 0)
 set(${PROJECT_NAME}_VERSION_MINOR 0)
 
 set(GLSLC_BINARY "glslc" CACHE PATH "Path to glslc binary to compile shaders by \"make shader\"")
+set(ASTYLE_BINARY "astyle" CACHE PATH "Path to astyle binary to format the code by \"make format\"")
+set(ASTYLE_OPTIONS -A1 -C -n -k3 -p -U -xg CACHE STRING "Astyle options used by \"make format\"")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 set(SOURCES 
@@ -16,17 +18,18 @@ src/camera.cpp
 src/inputs.cpp
 src/resources.cpp
 src/analyzer.cpp
-src/loadingBar/loadingbar.hpp
-src/arguments/arguments.hpp
+src/muxing.cpp
+src/libs/loadingBar/loadingbar.hpp
+src/libs/arguments/arguments.hpp
 )
 
 set(SOURCES_ENCODER
 src/lfEncoderApp.cpp
 src/encoder.cpp
 src/muxing.cpp
-src/loadingBar/loadingbar.hpp
+src/libs/loadingBar/loadingbar.hpp
 src/analyzer.cpp
-src/arguments/arguments.hpp
+src/libs/arguments/arguments.hpp
 )
 
 find_package(Vulkan REQUIRED)
@@ -41,7 +44,8 @@ set(ENCODER lfEncoder)
 add_executable(${ENCODER} ${SOURCES_ENCODER})
 
 add_executable(${PROJECT_NAME} ${SOURCES})
-target_include_directories(${PROJECT_NAME} PUBLIC libs)
+#target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/src/libs)
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/src/libs)
 
 set(SHADER_SRC_PATH src/shader)
 set(SHADER_COMPILATION_PATH precompiled)
@@ -63,6 +67,10 @@ foreach(SHADER_NAME ${SHADER_LIST})
     add_custom_command(TARGET shader COMMAND ${GLSLC_BINARY} ${CMAKE_SOURCE_DIR}/${SHADER_SRC_PATH}/${SHADER_NAME} -o ${CMAKE_SOURCE_DIR}/${SHADER_COMPILATION_PATH}/${STEM_NAME}.spv -O --target-env=vulkan1.2)
 endforeach()
 
+add_custom_target(format WORKING_DIRECTORY ${CMAKE_PROJECT_DIR})
+add_custom_command(TARGET format COMMAND ${ASTYLE_BINARY} ${CMAKE_SOURCE_DIR}/src/*.cpp,*.h \${ASTYLE_OPTIONS})
+add_custom_command(TARGET format COMMAND ${ASTYLE_BINARY} ${CMAKE_SOURCE_DIR}/${SHADER_SRC_PATH}/*.glsl,*.frag,*.comp,*.vert \${ASTYLE_OPTIONS})
+
 target_link_libraries(${PROJECT_NAME} vulkan glfw glm)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
@@ -70,3 +78,4 @@ target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
 target_link_libraries(${ENCODER} ffmpeg swscale)
 target_compile_features(${ENCODER} PRIVATE cxx_std_20)
 target_compile_options(${ENCODER} PRIVATE -Wall -Wextra -pedantic)
+

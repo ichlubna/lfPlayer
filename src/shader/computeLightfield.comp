@@ -3,20 +3,20 @@
 
 void main()
 {
-    if(any(greaterThan(outCoord,ivec2(MAP_WIDTH,MAP_HEIGHT))))
+    if(any(greaterThan(outCoord, ivec2(MAP_WIDTH, MAP_HEIGHT))))
         return;
-    
+
     vec4 color = vec4(0);
     vec4 pixel = texture(sampler2D(textures[FOCUSMAP_TEXTURE_ID], textSampler), mapUV);
-    int minSample = int(round(SAMPLE_COUNT*pixel.x));
+    int minSample = int(round(SAMPLE_COUNT * pixel.x));
 
     float invalid = pixel.y;
-    for(int i=0; i<4; i++)
-        invalid += texture(sampler2D(textures[FOCUSMAP_TEXTURE_ID], textSampler), mapUV+(vec2(1.0f,1.01f)-2*vec2(i/2, i%2))*MAP_HALF_PX_SIZE*3).y;
+    for(int i = 0; i < 4; i++)
+        invalid += texture(sampler2D(textures[FOCUSMAP_TEXTURE_ID], textSampler), mapUV + (vec2(1.0f, 1.01f) - 2 * vec2(i / 2, i % 2)) * MAP_HALF_PX_SIZE * 3).y;
     if(invalid > 0.0f)
-        minSample = int(round(SAMPLE_COUNT*medianLoad(32*MAP_HALF_PX_SIZE*2, mapUV, FOCUSMAP_TEXTURE_ID)));  
-    
-    color = vec4(float(minSample)/SAMPLE_COUNT); 
+        minSample = int(round(SAMPLE_COUNT * medianLoad(32 * MAP_HALF_PX_SIZE * 2, mapUV, FOCUSMAP_TEXTURE_ID)));
+
+    color = vec4(float(minSample) / SAMPLE_COUNT);
     //color = vec4(float(invalid>0));
     color.w = 1.0f;
     imageStore(images[OUTPUT_TEXTURE_ID], outCoord, color);

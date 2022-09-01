@@ -4,27 +4,27 @@
 
 void main()
 {
-    if(any(greaterThan(outCoord,ivec2(MAP_WIDTH,MAP_HEIGHT))))
+    if(any(greaterThan(outCoord, ivec2(MAP_WIDTH, MAP_HEIGHT))))
         return;
-/* 
-    float minVariance = 999.0f;
-    int minSample = 0;
-    for(int i=0; i<SAMPLE_COUNT; i++)
-    { 
-        float variance = getVariance(i);
-        if(variance < minVariance)
+    /*
+        float minVariance = 999.0f;
+        int minSample = 0;
+        for(int i=0; i<SAMPLE_COUNT; i++)
         {
-            minVariance = variance;
-            minSample = i;
+            float variance = getVariance(i);
+            if(variance < minVariance)
+            {
+                minVariance = variance;
+                minSample = i;
+            }
         }
-    }
-    vec2 pixel = vec2(minSample/SAMPLE_COUNT, 0);
-*/
+        vec2 pixel = vec2(minSample/SAMPLE_COUNT, 0);
+    */
     const vec2 INIT_MIN = vec2(9999.0f, 0);
     vec2 mins[3] = {INIT_MIN, INIT_MIN, INIT_MIN};
-    for(int i=0; i<SAMPLE_COUNT; i++)
-    { 
-        float variance = getVariance(calculateFocus(i)*rangeLimit, mapUV);
+    for(int i = 0; i < SAMPLE_COUNT; i++)
+    {
+        float variance = getVariance(calculateFocus(i) * rangeLimit, mapUV);
         if(variance < mins[0].x)
         {
             mins[2] = mins[1];
@@ -40,18 +40,18 @@ void main()
         {
             mins[2] = vec2(variance, float(i));
         }
-    
+
         //if(outCoord == ivec2(900,500)) debugPrintfEXT("%d,%f", i, variance);
-    } 
-    
-    vec2 pixel = vec2(mins[0].y/SAMPLE_COUNT, 0);
-    vec2 delta = abs(mins[0]-mins[1]) + abs(mins[2]-mins[1]) + abs(mins[0]-mins[2]);
+    }
+
+    vec2 pixel = vec2(mins[0].y / SAMPLE_COUNT, 0);
+    vec2 delta = abs(mins[0] - mins[1]) + abs(mins[2] - mins[1]) + abs(mins[0] - mins[2]);
     delta /= 3;
     if(mins[1].x > 0.0005)
-    //TODO doesnt work with 32, moc male? mozna vzdalenosti x
-    if(delta.y > 0.1*SAMPLE_COUNT)
-        pixel.y = 1.0f;
+        //TODO doesnt work with 32, moc male? mozna vzdalenosti x
+        if(delta.y > 0.1 * SAMPLE_COUNT)
+            pixel.y = 1.0f;
 
-    imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel,0,0));
-   
+    imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel, 0, 0));
+
 }

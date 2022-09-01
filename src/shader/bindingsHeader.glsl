@@ -3,11 +3,11 @@ layout(constant_id = 1) const int LOCAL_SIZE_X = 16;
 layout(constant_id = 2) const int LOCAL_SIZE_Y = 16;
 layout(constant_id = 3) const int LF_WIDTH = 1920;
 layout(constant_id = 4) const int LF_HEIGHT = 1080;
-layout(constant_id = 5) const float ASPECT_RATIO = 1920/1080.0f;
-layout(constant_id = 6) const float LF_HALF_PX_SIZE_X = 1/1920.0f;
-layout(constant_id = 7) const float LF_HALF_PX_SIZE_Y = 1/1080.0f;
-layout(constant_id = 8) const float MAP_HALF_PX_SIZE_X = 1/1920.0f;
-layout(constant_id = 9) const float MAP_HALF_PX_SIZE_Y = 1/1080.0f;
+layout(constant_id = 5) const float ASPECT_RATIO = 1920 / 1080.0f;
+layout(constant_id = 6) const float LF_HALF_PX_SIZE_X = 1 / 1920.0f;
+layout(constant_id = 7) const float LF_HALF_PX_SIZE_Y = 1 / 1080.0f;
+layout(constant_id = 8) const float MAP_HALF_PX_SIZE_X = 1 / 1920.0f;
+layout(constant_id = 9) const float MAP_HALF_PX_SIZE_Y = 1 / 1080.0f;
 layout(constant_id = 10) const int SAMPLE_COUNT = 255;
 layout(constant_id = 11) const int MAP_WIDTH = 1920;
 layout(constant_id = 12) const int MAP_HEIGHT = 1080;
@@ -25,7 +25,7 @@ layout(set = 0, binding = 0) uniform uniformBuffer
 
 layout(std430, set = 0, binding = 4) buffer volatile shaderStorageBuffer
 {
-  int data[SHADER_STORAGE_SIZE];  
+    int data[SHADER_STORAGE_SIZE];
 } shaderStorage;
 
 layout(set = 0, binding = 1) uniform sampler textSampler;

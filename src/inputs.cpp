@@ -2,8 +2,8 @@
 #include<iostream>
 void Inputs::setMousePosition(double x, double y)
 {
-    mouseX = x; 
-    mouseY = y; 
+    mouseX = x;
+    mouseY = y;
     mouseChanged = true;
 }
 

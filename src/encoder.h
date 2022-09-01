@@ -1,4 +1,4 @@
-extern "C" { 
+extern "C" {
 #include <libavformat/avformat.h>
 }
 #include <glm/glm.hpp>
@@ -8,24 +8,33 @@ extern "C" {
 
 class Encoder
 {
-    public:
+public:
     Encoder();
     void encode(std::string inputFolder, std::string outputFile, float quality, std::string format) const;
     const std::vector<uint8_t> extractPacketData(AVPacket *packet) const;
     static const AVPixelFormat outputPixelFormat{AV_PIX_FMT_YUV444P};
-    enum StreamFormat{ H265=0, AV1=1 };
+    enum StreamFormat { H265 = 0, AV1 = 1 };
 
-    private:
+private:
     class FFEncoder
     {
-        public:
+    public:
         FFEncoder(glm::uvec2 inResolution, AVPixelFormat inPixFmt, size_t inCrf, Encoder::StreamFormat format);
         ~FFEncoder();
-        friend void operator<<(FFEncoder &e, AVFrame *frame){e.encodeFrame(frame);}
-        friend void operator>>(FFEncoder &e, AVPacket **packetPtr){*packetPtr = e.retrievePacket();}
-        const AVCodecContext *getCodecContext() const {return codecContext;};
+        friend void operator<<(FFEncoder &e, AVFrame *frame)
+        {
+            e.encodeFrame(frame);
+        }
+        friend void operator>>(FFEncoder &e, AVPacket **packetPtr)
+        {
+            *packetPtr = e.retrievePacket();
+        }
+        const AVCodecContext *getCodecContext() const
+        {
+            return codecContext;
+        };
 
-        private:
+    private:
         void encodeFrame(AVFrame *frame);
         void initH265();
         void initAV1();
@@ -36,7 +45,7 @@ class Encoder
         std::string codecName;
         std::string codecParamsName;
         std::string codecParams;
-        AVPacket* retrievePacket();
+        AVPacket *retrievePacket();
         const AVCodec *codec;
         AVStream *stream;
         AVCodecContext *codecContext;
@@ -46,33 +55,48 @@ class Encoder
 
     class PairEncoder
     {
-        public:
+    public:
         class Frame
         {
-            public:
+        public:
             Frame(std::string file);
             ~Frame();
-            const AVFrame* getFrame() const { return frame; };
+            const AVFrame *getFrame() const
+            {
+                return frame;
+            };
 
-            private:
+        private:
             AVFormatContext *formatContext;
             AVCodec *codec;
             AVStream *stream;
             AVCodecContext *codecContext;
-            AVFrame *frame;            
+            AVFrame *frame;
             AVPacket *packet;
         };
 
-        PairEncoder(std::string ref, std::string frame, size_t inCrf, Encoder::StreamFormat inFormat) : referenceFile(ref), frameFile(frame), crf{inCrf}, format{inFormat} {encode();};
-        const std::vector<uint8_t>* getFramePacket() const {return &framePacket;};
-        const std::vector<uint8_t>* getReferencePacket() const {return &referencePacket;};
-        const glm::uvec2 getResolution() const {return {width, height};};
+        PairEncoder(std::string ref, std::string frame, size_t inCrf, Encoder::StreamFormat inFormat) : referenceFile(ref), frameFile(frame), crf{inCrf}, format{inFormat}
+        {
+            encode();
+        };
+        const std::vector<uint8_t> *getFramePacket() const
+        {
+            return &framePacket;
+        };
+        const std::vector<uint8_t> *getReferencePacket() const
+        {
+            return &referencePacket;
+        };
+        const glm::uvec2 getResolution() const
+        {
+            return {width, height};
+        };
 
-        private:
-        AVFrame* convertFrame(const AVFrame *inputFrame, AVPixelFormat pxFormat);
+    private:
+        AVFrame *convertFrame(const AVFrame *inputFrame, AVPixelFormat pxFormat);
         void encode();
-        std::string referenceFile; 
-        std::string frameFile; 
+        std::string referenceFile;
+        std::string frameFile;
         std::vector<uint8_t> framePacket;
         std::vector<uint8_t> referencePacket;
         size_t crf;

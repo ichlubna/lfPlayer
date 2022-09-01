@@ -1,4 +1,4 @@
-extern "C" { 
+extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
@@ -10,14 +10,14 @@ extern "C" {
 #include "resources.h"
 #include "muxing.h"
 #include "analyzer.h"
-#include "loadingBar/loadingbar.hpp"
+#include "libs/loadingBar/loadingbar.hpp"
 
-Encoder::Encoder() 
+Encoder::Encoder()
 {
 }
 
 const std::vector<uint8_t> Encoder::extractPacketData(AVPacket *packet) const
-{ 
+{
     return std::vector<uint8_t>(&packet->data[0], &packet->data[packet->size]);
 }
 
@@ -28,11 +28,11 @@ size_t Encoder::calculateCrf(StreamFormat format, float quality) const
 
     if(quality < 0 || quality > 1)
         throw std::runtime_error("The quality parameter should be in <0;1> interval.");
-    float inverseQuality = 1.0-quality;
+    float inverseQuality = 1.0 - quality;
     if(format == StreamFormat::H265)
-        return round(inverseQuality*MAX_H265_CRF); 
+        return round(inverseQuality * MAX_H265_CRF);
     else //if (format == StreamFormat::AV1)
-        return round(inverseQuality*MAX_AV1_CRF);
+        return round(inverseQuality * MAX_AV1_CRF);
 }
 
 Encoder::StreamFormat Encoder::stringToFormat(std::string format) const
@@ -50,16 +50,16 @@ void Encoder::encode(std::string inputFolder, std::string outputFile, float qual
     auto files = Analyzer::listPath(inputFolder);
     auto lastFileCoords = Analyzer::parseFilename(*files.rbegin()) + glm::uvec2(1);
     auto colsRows = lastFileCoords + glm::uvec2(1);
-    auto referenceCoords = lastFileCoords/2u;
+    auto referenceCoords = lastFileCoords / 2u;
     auto videoFormat = stringToFormat(format);
     size_t crf = calculateCrf(videoFormat, quality);
 
     std::cout << "Encoding..." << std::endl;
-    LoadingBar bar(files.size()+1, true);
+    LoadingBar bar(files.size() + 1, true);
     bar.print();
- 
-    size_t referenceIndex = referenceCoords.y * colsRows.x + referenceCoords.x; 
-    std::set<std::filesystem::path>::iterator it = files.begin(); 
+
+    size_t referenceIndex = referenceCoords.y * colsRows.x + referenceCoords.x;
+    std::set<std::filesystem::path>::iterator it = files.begin();
     std::advance(it, referenceIndex);
     std::string referenceFrame = *it;
     PairEncoder refFrame(referenceFrame, referenceFrame, crf, videoFormat);
@@ -67,32 +67,32 @@ void Encoder::encode(std::string inputFolder, std::string outputFile, float qual
 
     Muxing::Muxer muxer{resolution, colsRows, referenceCoords, videoFormat};
     for(auto const &file : files)
-    if(referenceFrame == file)
-    {
-        muxer << refFrame.getReferencePacket();
-        bar.add();
-    }
-    else
-    {
+        if(referenceFrame == file)
+        {
+            muxer << refFrame.getReferencePacket();
+            bar.add();
+        }
+        else
+        {
             PairEncoder newFrame(referenceFrame, file, crf, videoFormat);
             bar.add();
             muxer << newFrame.getFramePacket();
-    }
-    muxer.save(outputFile); 
+        }
+    muxer.save(outputFile);
 }
 
 void Encoder::FFEncoder::initH265()
 {
     codecName = "libx265";
     codecParamsName = "x265-params";
-    codecParams = "log-level=error:keyint="+std::to_string(NO_KEYINT)+":min-keyint="+std::to_string(NO_KEYINT)+":scenecut=0:crf="+std::to_string(crf);
+    codecParams = "log-level=error:keyint=" + std::to_string(NO_KEYINT) + ":min-keyint=" + std::to_string(NO_KEYINT) + ":scenecut=0:crf=" + std::to_string(crf);
 }
 
 void Encoder::FFEncoder::initAV1()
 {
     codecName = "libaom-av1";
     codecParamsName = "aom-params";
-    codecParams = "keyint_min="+std::to_string(NO_KEYINT)+":crf="+std::to_string(crf);
+    codecParams = "keyint_min=" + std::to_string(NO_KEYINT) + ":crf=" + std::to_string(crf);
 }
 
 Encoder::FFEncoder::FFEncoder(glm::uvec2 inResolution, AVPixelFormat inPixFmt, size_t inCrf, Encoder::StreamFormat format) : resolution{inResolution}, pixFmt{inPixFmt}, crf{inCrf}
@@ -113,7 +113,7 @@ void Encoder::FFEncoder::initEncoder()
     codecContext->width = resolution.x;
     codecContext->height = resolution.y;
     codecContext->pix_fmt = pixFmt;
-    codecContext->time_base = {1,60};
+    codecContext->time_base = {1, 60};
     av_opt_set(codecContext->priv_data, codecParamsName.c_str(), codecParams.c_str(), 0);
     if(avcodec_open2(codecContext, codec, nullptr) < 0)
         throw std::runtime_error("Cannot open output codec!");
@@ -126,7 +126,7 @@ Encoder::FFEncoder::~FFEncoder()
     av_packet_free(&packet);
 }
 
-AVPacket* Encoder::FFEncoder::retrievePacket()
+AVPacket *Encoder::FFEncoder::retrievePacket()
 {
     bool waitForPacket = true;
     while(waitForPacket)
@@ -149,12 +149,12 @@ void Encoder::FFEncoder::encodeFrame(AVFrame *frame)
 Encoder::PairEncoder::Frame::Frame(std::string file)
 {
     formatContext = avformat_alloc_context();
-    if (avformat_open_input(&formatContext, file.c_str(), nullptr, nullptr) != 0)
-        throw std::runtime_error("Cannot open file: "+file);
-    if (avformat_find_stream_info(formatContext, nullptr) < 0) 
-        throw std::runtime_error("Cannot find stream info in file: "+file);
+    if(avformat_open_input(&formatContext, file.c_str(), nullptr, nullptr) != 0)
+        throw std::runtime_error("Cannot open file: " + file);
+    if(avformat_find_stream_info(formatContext, nullptr) < 0)
+        throw std::runtime_error("Cannot find stream info in file: " + file);
     AVCodec *codec;
-    auto videoStreamId = av_find_best_stream(formatContext, AVMEDIA_TYPE_VIDEO, -1, -1, const_cast<const AVCodec**>(&codec), 0);
+    auto videoStreamId = av_find_best_stream(formatContext, AVMEDIA_TYPE_VIDEO, -1, -1, const_cast<const AVCodec **>(&codec), 0);
     if(videoStreamId < 0)
         throw std::runtime_error("No video stream available");
     if(!codec)
@@ -162,9 +162,9 @@ Encoder::PairEncoder::Frame::Frame(std::string file)
     codecContext = avcodec_alloc_context3(codec);
     if(!codecContext)
         throw std::runtime_error("Cannot allocate codec context memory");
-    if(avcodec_parameters_to_context(codecContext, formatContext->streams[videoStreamId]->codecpar)<0)
+    if(avcodec_parameters_to_context(codecContext, formatContext->streams[videoStreamId]->codecpar) < 0)
         throw std::runtime_error{"Cannot use the file parameters in context"};
-     if(avcodec_open2(codecContext, codec, nullptr) < 0)
+    if(avcodec_open2(codecContext, codec, nullptr) < 0)
         throw std::runtime_error("Cannot open codec.");
     frame = av_frame_alloc();
     packet = av_packet_alloc();
@@ -176,7 +176,7 @@ Encoder::PairEncoder::Frame::Frame(std::string file)
     {
         int err = avcodec_receive_frame(codecContext, frame);
         if(err == AVERROR_EOF || err == AVERROR(EAGAIN))
-            waitForFrame = false;                
+            waitForFrame = false;
         else if(err < 0)
             throw std::runtime_error("Cannot receive frame");
         if(err >= 0)
@@ -193,46 +193,46 @@ Encoder::PairEncoder::Frame::~Frame()
     av_packet_free(&packet);
 }
 
-AVFrame* Encoder::PairEncoder::convertFrame(const AVFrame *inputFrame, AVPixelFormat pxFormat)
+AVFrame *Encoder::PairEncoder::convertFrame(const AVFrame *inputFrame, AVPixelFormat pxFormat)
 {
     AVFrame *outputFrame = av_frame_alloc();
     outputFrame->width = inputFrame->width;
     outputFrame->height = inputFrame->height;
     outputFrame->format = format;
     av_frame_get_buffer(outputFrame, 24);
-    auto swsContext = sws_getContext(   inputFrame->width, inputFrame->height, static_cast<AVPixelFormat>(inputFrame->format),
-                                        inputFrame->width, inputFrame->height, pxFormat, SWS_BICUBIC, nullptr, nullptr, nullptr);
+    auto swsContext = sws_getContext(inputFrame->width, inputFrame->height, static_cast<AVPixelFormat>(inputFrame->format),
+                                     inputFrame->width, inputFrame->height, pxFormat, SWS_BICUBIC, nullptr, nullptr, nullptr);
     if(!swsContext)
         throw std::runtime_error("Cannot get conversion context!");
-    sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize); 
-    return outputFrame; 
+    sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
+    return outputFrame;
 }
 
 void Encoder::PairEncoder::encode()
 {
-    Frame reference(referenceFile); 
-    Frame frame(frameFile); 
+    Frame reference(referenceFile);
+    Frame frame(frameFile);
     auto referenceFrame = reference.getFrame();
 
     width = referenceFrame->width;
     height = referenceFrame->height;
 
-    FFEncoder encoder({referenceFrame->width, referenceFrame->height}, outputPixelFormat, crf, format); 
+    FFEncoder encoder({referenceFrame->width, referenceFrame->height}, outputPixelFormat, crf, format);
 
     auto convertedReference = convertFrame(reference.getFrame(), outputPixelFormat);
     auto convertedFrame = convertFrame(frame.getFrame(), outputPixelFormat);
-    
+
     encoder << convertedReference;
     AVFrame *convertedFrameRaw = convertedFrame;
     convertedFrameRaw->key_frame = 0;
     encoder << convertedFrameRaw;
     encoder << nullptr;
 
-    std::vector<uint8_t> *buffer = &referencePacket; 
+    std::vector<uint8_t> *buffer = &referencePacket;
     AVPacket *packet;
-    for(int i=0; i<2; i++)
+    for(int i = 0; i < 2; i++)
     {
-        encoder >> &packet; 
+        encoder >> &packet;
         if(!packet)
             throw std::runtime_error("Cannot receieve packet!");
         buffer->insert(buffer->end(), &packet->data[0], &packet->data[packet->size]);
