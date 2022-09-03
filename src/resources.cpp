@@ -56,7 +56,8 @@ Resources::FrameGrid::Encoding Resources::numberToFormat(size_t number)
     if(number == 0)
         return Resources::FrameGrid::Encoding::H265;
     else
-        return Resources::FrameGrid::Encoding::AV1;
+        throw std::runtime_error("AV1 format is not supported yet.");
+    return Resources::FrameGrid::Encoding::AV1;
 }
 
 void Resources::loadVideoLightfield(std::string path)

@@ -1,7 +1,7 @@
 #ifndef WINDOW_ABSTRACT_HDR
 #define WINDOW_ABSTRACT_HDR
 #include <vector>
-#include "inputs.h"
+import inputs;
 
 class Window
 {

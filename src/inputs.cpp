@@ -1,5 +1,9 @@
-#include "inputs.h"
+module;
+
 #include<iostream>
+
+module inputs;
+
 void Inputs::setMousePosition(double x, double y)
 {
     mouseX = x;

@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(lfPlayer LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED on)
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic -fmodules-ts")
 set(${PROJECT_NAME}_VERSION_MAJOR 0)
 set(${PROJECT_NAME}_VERSION_MINOR 0)
 
@@ -9,13 +12,15 @@ set(ASTYLE_OPTIONS -A1 -C -n -k3 -p -U -xg CACHE STRING "Astyle options used by 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 set(SOURCES 
-src/lfPlayerApp.cpp
+src/inputs.cxx
+src/inputs.cpp
+src/camera.cxx
+src/camera.cpp
 src/gpu.cpp
+src/lfPlayerApp.cpp
 src/gpuVulkan.cpp
 src/windowGlfw.cpp
 src/simulation.cpp
-src/camera.cpp
-src/inputs.cpp
 src/resources.cpp
 src/analyzer.cpp
 src/muxing.cpp
@@ -44,7 +49,6 @@ set(ENCODER lfEncoder)
 add_executable(${ENCODER} ${SOURCES_ENCODER})
 
 add_executable(${PROJECT_NAME} ${SOURCES})
-#target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/src/libs)
 include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/src/libs)
 
 set(SHADER_SRC_PATH src/shader)
@@ -71,11 +75,9 @@ add_custom_target(format WORKING_DIRECTORY ${CMAKE_PROJECT_DIR})
 add_custom_command(TARGET format COMMAND ${ASTYLE_BINARY} ${CMAKE_SOURCE_DIR}/src/*.cpp,*.h \${ASTYLE_OPTIONS})
 add_custom_command(TARGET format COMMAND ${ASTYLE_BINARY} ${CMAKE_SOURCE_DIR}/${SHADER_SRC_PATH}/*.glsl,*.frag,*.comp,*.vert \${ASTYLE_OPTIONS})
 
+set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
 target_link_libraries(${PROJECT_NAME} vulkan glfw glm)
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
 
+set_property(TARGET ${ENCODER} PROPERTY CXX_STANDARD 20)
 target_link_libraries(${ENCODER} ffmpeg swscale)
-target_compile_features(${ENCODER} PRIVATE cxx_std_20)
-target_compile_options(${ENCODER} PRIVATE -Wall -Wextra -pedantic)
 

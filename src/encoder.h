@@ -1,4 +1,5 @@
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 }
 #include <glm/glm.hpp>

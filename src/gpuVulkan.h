@@ -1,7 +1,11 @@
+#define VK_ENABLE_BETA_EXTENSIONS
+
 #include <memory>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_handles.hpp>
 #include "gpu.h"
+
+#include <vulkan/vulkan_beta.h>
 
 class GpuVulkan : public Gpu
 {
@@ -24,7 +28,10 @@ private:
             VK_KHR_MAINTENANCE3_EXTENSION_NAME,
             VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
             VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-            VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME};
+            VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
+            VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
+            VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
+            VK_EXT_VIDEO_DECODE_H265_EXTENSION_NAME};
     const class
     {
     public:
@@ -138,6 +145,7 @@ private:
         SwapChainFrame frame;
         vk::UniqueSampler sampler;
         DescriptorWrite descriptorWrite;
+        VkVideoSessionKHR videoSession;
     };
 
     class InFlightFrames
@@ -163,6 +171,7 @@ private:
         int graphics{-1};
         int present{-1};
         int compute{-1};
+        int video{-1};
     } queueFamilyIDs;
 
     class
@@ -171,6 +180,7 @@ private:
         vk::Queue graphics;
         vk::Queue compute;
         vk::Queue present;
+        vk::Queue video;
     } queues;
 
     class
@@ -281,4 +291,5 @@ private:
     void createDescriptorSets(PerFrameData &frameData);
     bool isDeviceOK(const vk::PhysicalDevice &potDevice);
     uint32_t getMemoryType(uint32_t typeFlags, vk::MemoryPropertyFlags properties);
+    void initVideoDecoder();
 };

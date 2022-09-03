@@ -4,6 +4,8 @@
 #include <iostream>
 #include <fstream>
 #include <limits>
+
+#define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_enums.hpp>
 #include "gpuVulkan.h"
@@ -86,6 +88,8 @@ bool GpuVulkan::isDeviceOK(const vk::PhysicalDevice &potDevice)
                     queueFamilyIDs.graphics = i;
                 else if(queueFamily.queueFlags & vk::QueueFlagBits::eCompute)
                     queueFamilyIDs.compute = i;
+                else if(static_cast<VkQueueFlags>(queueFamily.queueFlags) & VkQueueFlagBits::VK_QUEUE_VIDEO_DECODE_BIT_KHR)
+                    queueFamilyIDs.video = i;
             }
             i++;
         }
@@ -1209,6 +1213,31 @@ void GpuVulkan::loadFrameTextures()
         }
     }
     frameData.currentLfFrames = newCurrentLfFrames;
+}
+
+void GpuVulkan::initVideoDecoder()
+{
+    for(auto &frameData : inFlightFrames.perFrameData)
+    {
+        VkVideoProfileKHR profile;
+        profile.videoCodecOperation = VkVideoCodecOperationFlagBitsKHR::VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_EXT;
+        profile.chromaBitDepth = VkVideoComponentBitDepthFlagBitsKHR::VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR;
+        profile.chromaSubsampling = VkVideoChromaSubsamplingFlagBitsKHR::VK_VIDEO_CHROMA_SUBSAMPLING_444_BIT_KHR;
+        profile.lumaBitDepth = VkVideoComponentBitDepthFlagBitsKHR::VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR; 
+
+        VkVideoSessionCreateInfoKHR createInfo;
+        createInfo.flags = 0;
+        createInfo.pVideoProfile = &profile;
+        createInfo.queueFamilyIndex = queueFamilyIDs.video;
+        createInfo.pictureFormat = VkFormat::VK_FORMAT_R8G8B8_UINT;//vk::Format::eR8G8B8Uint;
+        createInfo.maxCodedExtent = /*vk::Extent2D*/VkExtent2D{Gpu::lightfield->resolution.x, Gpu::lightfield->resolution.y};
+        createInfo.maxReferencePicturesSlotsCount = 5;
+        createInfo.maxReferencePicturesActiveCount = 5;
+        createInfo.referencePicturesFormat = VkFormat::VK_FORMAT_R8G8B8_UINT;//vk::Format::eR8G8B8Uint;
+
+        vk::DispatchLoaderDynamic instanceLoader(*instance, vkGetInstanceProcAddr);
+        instanceLoader.vkCreateVideoSessionKHR(*device, &createInfo, nullptr, &frameData.videoSession);
+    }
 }
 
 void GpuVulkan::updateDescriptors()

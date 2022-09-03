@@ -1,3 +1,4 @@
+
 #include "gpu.h"
 #include<iostream>
 void Gpu::updateFrameIndices(std::vector<LfCurrentFrame> &frames)

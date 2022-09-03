@@ -1,3 +1,4 @@
+#define GLM_FORCE_SWIZZLE
 #include <chrono>
 #include <thread>
 #include <filesystem>

@@ -1,7 +1,10 @@
-#ifndef INPUTS_HDR
-#define INPUTS_HDR
+module;
+
 #include <map>
-class Inputs
+
+export module inputs;
+
+export class Inputs
 {
 public:
     enum Key : long
@@ -77,4 +80,3 @@ private:
     bool mouseChanged{false};
 };
 
-#endif
