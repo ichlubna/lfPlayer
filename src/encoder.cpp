@@ -6,8 +6,8 @@ extern "C" {
 #include <stdexcept>
 #include <filesystem>
 #include "encoder.h"
-#include "resources.h"
 #include "muxing.h"
+#include "resources.h"
 #include "analyzer.h"
 #include "libs/loadingBar/loadingbar.hpp"
 

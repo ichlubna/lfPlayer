@@ -270,7 +270,7 @@ void GpuVulkan::createSwapChainImageViews()
 std::vector<char> GpuVulkan::loadShader(const char *path)
 {
     std::ifstream file(path, std::ios::ate | std::ios::binary);
-    if(!file)
+    if(!file.is_open())
         throw std::runtime_error("Cannot open shader file.");
 
     size_t size = file.tellg();
@@ -1181,6 +1181,40 @@ GpuVulkan::PerFrameData::CurrentFrame GpuVulkan::findExistingLfFrame(glm::uvec2 
     return {nullptr, {0, 0}};
 }
 
+size_t GpuVulkan::findFirstTrue(std::vector<bool> *slots)
+{
+    for(size_t i = 0; i < slots->size(); i++)
+        if((*slots)[i])
+        {
+            (*slots)[i] = false;
+            return i;
+        }
+    return slots->size()+1;
+}
+
+std::vector<bool> GpuVulkan::recycleFrames(std::vector<PerFrameData::CurrentFrame> *newFrames)
+{
+    auto &frameData = inFlightFrames.currentFrame();
+    std::vector<bool> freeSlots(PerFrameData::LF_FRAMES_COUNT, true);
+
+    for(size_t newID = 0; newID < Gpu::currentFrames.size(); newID++)
+    { 
+        auto const &frameInfo = Gpu::currentFrames[newID];
+        auto reusedFrame = findExistingLfFrame(frameInfo.coords);
+        if(reusedFrame.viewPtr)
+            for(size_t i = 0; i < Gpu::currentFrames.size(); i++)
+            {
+                auto &imageGpu = frameData.lfFrames.images[i];
+                if(&imageGpu.imageView.get() == reusedFrame.viewPtr)
+                {
+                    freeSlots[i] = false;
+                    newFrames->at(newID) = reusedFrame;
+                }
+            } 
+    }
+    return freeSlots;
+}
+
 void GpuVulkan::loadTexture(Texture *texture, glm::vec2 resolution, const std::vector<uint8_t> *imageData)
 {
     Buffer stagingBuffer = createBuffer(texture->image.memorySize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
@@ -1196,18 +1230,16 @@ void GpuVulkan::loadTexture(Texture *texture, glm::vec2 resolution, const std::v
 
 void GpuVulkan::loadFrameTextures()
 {
-    std::vector<PerFrameData::CurrentFrame> newCurrentLfFrames(PerFrameData::LF_FRAMES_COUNT);
     auto &frameData = inFlightFrames.currentFrame();
+    std::vector<PerFrameData::CurrentFrame> newCurrentLfFrames(PerFrameData::LF_FRAMES_COUNT); 
+    auto freeSlots = recycleFrames(&newCurrentLfFrames);
     for(size_t i = 0; i < Gpu::currentFrames.size(); i++)
     {
-        auto const &frameInfo = Gpu::currentFrames[i];
-        auto reusedFrame = findExistingLfFrame(frameInfo.coords);
-        if(reusedFrame.viewPtr)
-            newCurrentLfFrames[i] = reusedFrame;
-        else
-        {
+        if(!newCurrentLfFrames[i].viewPtr)
+        {            
+            auto const &frameInfo = Gpu::currentFrames[i];
             auto const &imageData = Gpu::lightfield->dataGrid[frameInfo.coords.y][frameInfo.coords.x];
-            auto &imageGpu = frameData.lfFrames.images[i];
+            auto &imageGpu = frameData.lfFrames.images[findFirstTrue(&freeSlots)];
             loadTexture(&imageGpu, {Gpu::lightfield->resolution.x, Gpu::lightfield->resolution.y}, &imageData);
             newCurrentLfFrames[i] = {&imageGpu.imageView.get(), frameInfo.coords};
         }
@@ -1393,7 +1425,6 @@ GpuVulkan::GpuVulkan(Window *w, std::shared_ptr<Resources::FrameGrid> lf, Gpu::F
     createComputeCommandBuffers();
     createPipelineSync();
     setTexturesLayouts();
-
 }
 
 GpuVulkan::~GpuVulkan()

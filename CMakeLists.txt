@@ -14,8 +14,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules")
 set(SOURCES 
 src/inputs.cxx
 src/inputs.cpp
-src/camera.cxx
+#src/camera.cxx
 src/camera.cpp
+src/muxing.cpp
 src/gpu.cpp
 src/lfPlayerApp.cpp
 src/gpuVulkan.cpp
@@ -23,15 +24,14 @@ src/windowGlfw.cpp
 src/simulation.cpp
 src/resources.cpp
 src/analyzer.cpp
-src/muxing.cpp
 src/libs/loadingBar/loadingbar.hpp
 src/libs/arguments/arguments.hpp
 )
 
 set(SOURCES_ENCODER
+src/muxing.cpp
 src/lfEncoderApp.cpp
 src/encoder.cpp
-src/muxing.cpp
 src/libs/loadingBar/loadingbar.hpp
 src/analyzer.cpp
 src/libs/arguments/arguments.hpp

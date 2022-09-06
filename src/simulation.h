@@ -1,8 +1,8 @@
 #include <memory>
 #include "window.h"
 #include "gpu.h"
-
-import camera;
+#include "camera.h"
+//import camera;
 
 class Simulation
 {

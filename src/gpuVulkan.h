@@ -134,8 +134,8 @@ private:
         class CurrentFrame
         {
         public:
-            vk::ImageView *viewPtr = nullptr;
-            glm::uvec2 coords;
+            vk::ImageView *viewPtr{nullptr};
+            glm::uvec2 coords{0,0};
         };
         std::vector<CurrentFrame> currentLfFrames;
 
@@ -276,6 +276,8 @@ private:
     void allocateTextureResources(Textures &textures, vk::ImageUsageFlags usageFlags);
     void allocateTextures();
     PerFrameData::CurrentFrame findExistingLfFrame(glm::uvec2 coords);
+    size_t findFirstTrue(std::vector<bool> *slots);
+    std::vector<bool> recycleFrames(std::vector<PerFrameData::CurrentFrame> *newFrames);
     void loadTexture(Texture *texture, glm::vec2 resolution, const std::vector<uint8_t> *imageData);
     void setTexturesLayouts();
     Image createImage(unsigned int width, unsigned int height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties);

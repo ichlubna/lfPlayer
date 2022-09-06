@@ -1,12 +1,12 @@
-module;
+//module;
 
 #define GLM_FORCE_SWIZZLE
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-export module camera;
-
-export class Camera
+//export module camera;
+//export
+class Camera
 {
 public:
     //relative movement

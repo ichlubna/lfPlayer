@@ -118,6 +118,8 @@ void Simulation::processInputs()
             end = true;
     }
 
+if(glm::dot(glm::vec2(1,1), glm::vec2(1,1)) < 0)
+std::cerr << "ttttttttttttttttaaaaa";
     if(glm::dot(glm::vec2(0.5f) - camera->position.xy(), (camera->position.xy() + posOffset) - camera->position.xy()) < 0)
         posOffset *= recalculateSpeedMultiplier(camera->position.xy());
     camera->move(glm::vec3(posOffset, 0));
