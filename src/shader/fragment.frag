@@ -21,4 +21,11 @@ void main()
         outColor = vec4(float(minSample) / SAMPLE_COUNT);
         outColor.w = 1.0f;
     }
+
+    if(uniforms.screenshot == 1)
+    {
+        uvec2 pixelCoords = uvec2(uv*uniforms.resolution);
+        uint index = pixelCoords.y*uniforms.resolution.x + pixelCoords.x;
+        shaderStorage.data[index] = int(packUnorm4x8(outColor)); 
+    } 
 }

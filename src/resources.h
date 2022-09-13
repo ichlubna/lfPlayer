@@ -30,6 +30,7 @@ public:
     };
 
     [[nodiscard]] const std::shared_ptr<FrameGrid> loadLightfield(std::string path);
+    static void storeImage(std::vector<uint8_t> *data, glm::uvec2 resolution, std::string path);
 
 private:
     class Image

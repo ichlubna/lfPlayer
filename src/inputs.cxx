@@ -12,7 +12,8 @@ public:
         ESC = 1,
         LMB = 2, RMB = 4, MMB = 8,
         W = 16, A = 32, S = 64, D = 128,
-        ALT = 256, ENTER = 512, Z = 1024
+        ALT = 256, ENTER = 512, Z = 1024,
+        X = 2048
     };
     std::map<long, bool> released;
 

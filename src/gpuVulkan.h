@@ -11,6 +11,7 @@ class GpuVulkan : public Gpu
 {
 public:
     void render() override;
+    void requestScreenshot(std::vector<uint8_t> *data) override;
     GpuVulkan(Window *w, std::shared_ptr<Resources::FrameGrid> lf, Gpu::FocusMapSettings fs);
     ~GpuVulkan();
 private:
@@ -121,6 +122,12 @@ private:
         std::vector<vk::WriteDescriptorSet> writeSets;
     };
 
+    class Decoder
+    {
+        public:
+        VkVideoSessionKHR videoSession;
+    };
+
     class PerFrameData
     {
     public:
@@ -145,7 +152,8 @@ private:
         SwapChainFrame frame;
         vk::UniqueSampler sampler;
         DescriptorWrite descriptorWrite;
-        VkVideoSessionKHR videoSession;
+        Decoder decoder;
+        std::vector<uint8_t> *shaderStorageCopy{nullptr};
     };
 
     class InFlightFrames
@@ -213,8 +221,10 @@ private:
 
     std::vector<std::unique_ptr<ComputePipeline>> computePipelines;
     int textureWriteSetIndex{0};
-    static constexpr size_t SHADER_STORAGE_COUNT = 1024 + 1;
-    static constexpr size_t SHADER_STORAGE_SIZE = sizeof(int) * SHADER_STORAGE_COUNT;
+    static constexpr size_t SHADER_STORAGE_MB{10};
+    //static constexpr size_t SHADER_STORAGE_COUNT = 1024 + 1; FOR RANGE SHADER
+    static constexpr size_t SHADER_STORAGE_COUNT{(10000000*SHADER_STORAGE_MB)/sizeof(uint32_t)};
+    static constexpr size_t SHADER_STORAGE_SIZE{sizeof(uint32_t) * SHADER_STORAGE_COUNT};
     static constexpr int WARP_SIZE{32};
     static constexpr int LOCAL_SIZE_X{WARP_SIZE / 2};
     static constexpr int LOCAL_SIZE_Y{WARP_SIZE / 2};
@@ -263,6 +273,8 @@ private:
     void createFramebuffers();
     void createCommandPools();
     void createGraphicsCommandBuffers();
+    void clearShaderStorage(PerFrameData &frameData, size_t computeSubmitID);
+    void getStorageBufferData(std::vector<uint8_t> *data, size_t size);
     void createComputeCommandBuffers();
     GpuVulkan::Buffer createBuffer(size_t size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties);
     void createBuffers();

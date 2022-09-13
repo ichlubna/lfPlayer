@@ -49,7 +49,7 @@ WindowGlfw::WindowGlfw(unsigned int w, unsigned int h) : Window{w, h}
     if(!glfwInit())
         throw std::runtime_error("Cannot init GLFW.");
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     window = glfwCreateWindow(width, height, "Engine", nullptr, nullptr);
     if(!window)
         throw std::runtime_error("Cannot create window (GLFW).");
@@ -87,6 +87,10 @@ WindowGlfw::WindowGlfw(unsigned int w, unsigned int h) : Window{w, h}
 
         case GLFW_KEY_Z:
             keyCode = Inputs::Key::Z;
+            break;
+        
+        case GLFW_KEY_X:
+            keyCode = Inputs::Key::X;
             break;
 
         case GLFW_KEY_RIGHT_ALT:

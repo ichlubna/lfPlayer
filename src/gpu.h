@@ -14,7 +14,7 @@ public:
     {
     private:
         static constexpr size_t LF_ATTRIBS{16};
-        static constexpr size_t STANDALONE_COUNT{2};
+        static constexpr size_t STANDALONE_COUNT{5};
         static constexpr size_t UNIFORM_COUNT{LF_ATTRIBS * 3 + STANDALONE_COUNT};
         using Data = std::array<int32_t, UNIFORM_COUNT>;
 
@@ -36,9 +36,12 @@ public:
             return &data;
         };
 
+        std::array<float *, LF_ATTRIBS> lfAttribs;
         float *focus;
         int *switchView;
-        std::array<float *, LF_ATTRIBS> lfAttribs;
+        int *screenshot;
+        int *windowWidth;
+        int *windowHeight;
 
         Uniforms()
         {
@@ -46,6 +49,9 @@ public:
                 attrib = mapFloat();
             focus = mapFloat();
             switchView = mapInt();
+            screenshot = mapInt();
+            windowWidth = mapInt();
+            windowHeight = mapInt();
         };
 
     } uniforms;
@@ -68,6 +74,7 @@ public:
 
     void updateFrameIndices(std::vector<LfCurrentFrame> &frames);
     virtual void render() = 0;
+    virtual void requestScreenshot(std::vector<uint8_t> *data) = 0;
     Gpu(Window *w, std::shared_ptr<Resources::FrameGrid> lf, FocusMapSettings fs) : windowPtr{w}, lightfield{lf}, focusMapSettings{fs}
     {
         focusMapSettings.width = lightfield->resolution.x * focusMapSettings.scale;

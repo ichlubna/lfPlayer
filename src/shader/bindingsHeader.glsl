@@ -21,6 +21,8 @@ layout(set = 0, binding = 0) uniform uniformBuffer
     mat4 lfFrameAttribs;
     float focus;
     int switchView;
+    int screenshot;
+    uvec2 resolution;
 } uniforms;
 
 layout(std430, set = 0, binding = 4) buffer volatile shaderStorageBuffer

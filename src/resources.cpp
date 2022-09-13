@@ -3,7 +3,7 @@
 #include <string>
 #include <filesystem>
 #include <algorithm>
-#include <iostream>
+#include <fstream>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include "resources.h"
@@ -17,7 +17,6 @@ void Resources::FrameGrid::initGrid()
     for(auto &row : dataGrid)
         row.resize(colsRows.y);
 }
-
 
 void Resources::FrameGrid::loadImage(std::string path, glm::uvec2 coords)
 {
@@ -80,4 +79,20 @@ const std::shared_ptr<Resources::FrameGrid> Resources::loadLightfield(std::strin
     return lightfield;
 }
 
+void Resources::storeImage(std::vector<uint8_t> *data, glm::uvec2 resolution, std::string path)
+{
+  	std::ofstream fs(path, std::ios::out | std::ios::binary);
+    if (!fs.is_open())
+        throw std::runtime_error("Cannot open the file for sceenshot.");
+    constexpr char const *BINARY_PPM{"P6"};
+    constexpr size_t MAX_VAL{255};
+    fs << BINARY_PPM << std::endl;
+	fs << "#Exported with Lightfield Player" << std::endl;
+	fs << resolution.x << " " << resolution.y << std::endl;
+	fs << MAX_VAL << std::endl;
+
+    for(size_t i=0; i<data->size(); i++)
+        if(i%4 != 0)
+            fs << data->at(i);
+}
 

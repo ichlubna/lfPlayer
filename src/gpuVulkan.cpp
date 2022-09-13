@@ -20,7 +20,7 @@ void GpuVulkan::createInstance()
 {
     vk::ApplicationInfo appInfo;
     appInfo	.setPApplicationName(appName.c_str())
-    .setApiVersion(VK_MAKE_VERSION(1, 2, 19))
+    .setApiVersion(VK_MAKE_VERSION(1, 3, 227))
     .setEngineVersion(VK_MAKE_VERSION(1, 0, 0))
     .setApplicationVersion(VK_MAKE_VERSION(1, 0, 0))
     .setPEngineName(engineName.c_str());
@@ -72,7 +72,8 @@ bool GpuVulkan::isDeviceOK(const vk::PhysicalDevice &potDevice)
     vk::PhysicalDeviceProperties properties = potDevice.getProperties();
     vk::PhysicalDeviceFeatures features = potDevice.getFeatures();
 
-    if(properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu && features.geometryShader)
+
+    if(properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu && features.fragmentStoresAndAtomics)
     {
         unsigned int queueFamilyCount = 0;
         potDevice.getQueueFamilyProperties(&queueFamilyCount, {});
@@ -137,8 +138,8 @@ void GpuVulkan::createDevice()
     queueCreateInfos[1].queueCount = 1;
     float computeQueuePriority = 1.0f;
     queueCreateInfos[1].pQueuePriorities = &computeQueuePriority;
-
-    vk::PhysicalDeviceFeatures deviceFeatures = {};
+ 
+    vk::PhysicalDeviceFeatures deviceFeatures = physicalDevice.getFeatures();
     deviceFeatures.samplerAnisotropy = true;
     //TODO check if gpu supports
 
@@ -400,6 +401,21 @@ void GpuVulkan::createDescriptorSetLayout()
         throw std::runtime_error("Cannot create descriptor set layout.");
 }
 
+void GpuVulkan::clearShaderStorage(PerFrameData &frameData, size_t computeSubmitID)
+{
+    auto &submitData = frameData.computeSubmits[computeSubmitID];
+    submitData.commandBuffer->fillBuffer(*frameData.shaderStorageBuffer.buffer, 0, VK_WHOLE_SIZE, 0);
+    vk::MemoryBarrier2KHR barrier;
+    barrier.setSrcStageMask(vk::PipelineStageFlagBits2KHR::eTransfer)
+    .setDstStageMask(vk::PipelineStageFlagBits2KHR::eComputeShader);
+    vk::DependencyInfoKHR dependencyInfo;
+    dependencyInfo.setPMemoryBarriers(&barrier)
+    .setMemoryBarrierCount(1);
+
+    vk::DispatchLoaderDynamic instanceLoader(*instance, vkGetInstanceProcAddr);
+    submitData.commandBuffer->pipelineBarrier2KHR(dependencyInfo, instanceLoader);
+} 
+
 void GpuVulkan::createComputeCommandBuffers()
 {
     for(auto &frameData : inFlightFrames.perFrameData)
@@ -421,18 +437,7 @@ void GpuVulkan::createComputeCommandBuffers()
                 throw std::runtime_error("Compute command buffer recording couldn't begin.");
 
             if(i == 0)
-            {
-                submitData.commandBuffer->fillBuffer(*frameData.shaderStorageBuffer.buffer, 0, VK_WHOLE_SIZE, 0);
-                vk::MemoryBarrier2KHR barrier;
-                barrier.setSrcStageMask(vk::PipelineStageFlagBits2KHR::eTransfer)
-                .setDstStageMask(vk::PipelineStageFlagBits2KHR::eComputeShader);
-                vk::DependencyInfoKHR dependencyInfo;
-                dependencyInfo.setPMemoryBarriers(&barrier)
-                .setMemoryBarrierCount(1);
-
-                vk::DispatchLoaderDynamic instanceLoader(*instance, vkGetInstanceProcAddr);
-                submitData.commandBuffer->pipelineBarrier2KHR(dependencyInfo, instanceLoader);
-            }
+                clearShaderStorage(frameData, i);
 
             submitData.commandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipeline));
             submitData.commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, *(computePipelines[i]->pipelineLayout), 0, 1, &*frameData.generalDescriptorSet, 0, {});
@@ -764,7 +769,7 @@ void GpuVulkan::createBuffers()
     for(auto &frameData : inFlightFrames.perFrameData)
     {
         frameData.uniformBuffer = createBuffer(Gpu::uniforms.SIZE, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        frameData.shaderStorageBuffer = createBuffer(SHADER_STORAGE_SIZE, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        frameData.shaderStorageBuffer = createBuffer(SHADER_STORAGE_SIZE, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);//vk::MemoryPropertyFlagBits::eDeviceLocal);
     }
 }
 
@@ -776,6 +781,23 @@ void GpuVulkan::updateUniforms()
         throw std::runtime_error("Cannot map memory for uniforms update.");
     memcpy(data, Gpu::uniforms.getData()->data(), Gpu::uniforms.SIZE);
     device->unmapMemory(*frameData.uniformBuffer.memory);
+}
+
+void GpuVulkan::requestScreenshot(std::vector<uint8_t> *data)
+{
+    auto &frameData = inFlightFrames.currentFrame();
+    frameData.shaderStorageCopy = data;
+}
+
+void GpuVulkan::getStorageBufferData(std::vector<uint8_t> *data, size_t size)
+{
+    auto &frameData = inFlightFrames.currentFrame();
+    void *dataPtr;
+    if(device->mapMemory(*frameData.shaderStorageBuffer.memory, 0, size, vk::MemoryMapFlags(), &dataPtr) != vk::Result::eSuccess)
+        throw std::runtime_error("Cannot map memory for shader storage download.");
+    data->resize(size);
+    memcpy(data->data(), dataPtr, size);
+    device->unmapMemory(*frameData.shaderStorageBuffer.memory);
 }
 
 void GpuVulkan::createDescriptorPool()
@@ -1170,7 +1192,7 @@ void GpuVulkan::updateLightfieldTextures()
     if(Gpu::lightfield->encoding == Resources::FrameGrid::Encoding::IMG)
         loadFrameTextures();
     else
-        std::cerr << "a";
+        throw std::runtime_error("Working on it");
 }
 
 GpuVulkan::PerFrameData::CurrentFrame GpuVulkan::findExistingLfFrame(glm::uvec2 coords)
@@ -1268,7 +1290,7 @@ void GpuVulkan::initVideoDecoder()
         createInfo.referencePicturesFormat = VkFormat::VK_FORMAT_R8G8B8_UINT;//vk::Format::eR8G8B8Uint;
 
         vk::DispatchLoaderDynamic instanceLoader(*instance, vkGetInstanceProcAddr);
-        instanceLoader.vkCreateVideoSessionKHR(*device, &createInfo, nullptr, &frameData.videoSession);
+        instanceLoader.vkCreateVideoSessionKHR(*device, &createInfo, nullptr, &frameData.decoder.videoSession);
     }
 }
 
@@ -1371,7 +1393,12 @@ void GpuVulkan::render()
         return;
     }
 
-    //device->waitIdle();
+    if(frameData.shaderStorageCopy)
+    {
+        device->waitIdle();
+        getStorageBufferData(frameData.shaderStorageCopy, extent.width*extent.height*sizeof(uint32_t));
+        frameData.shaderStorageCopy = nullptr;
+    }
     inFlightFrames.switchFrame();
 }
 

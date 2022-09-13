@@ -6,7 +6,6 @@
 #include "gpuVulkan.h"
 #include "windowGlfw.h"
 
-#include <iostream>
 Simulation::Simulation(std::string filename, float focusMapScale, size_t focusMapIterations, GpuAPI gpuApi, WindowAPI windowApi) : camera {std::make_unique<Camera>()}
 {
     lightfield = resources.loadLightfield(filename);
@@ -118,8 +117,6 @@ void Simulation::processInputs()
             end = true;
     }
 
-if(glm::dot(glm::vec2(1,1), glm::vec2(1,1)) < 0)
-std::cerr << "ttttttttttttttttaaaaa";
     if(glm::dot(glm::vec2(0.5f) - camera->position.xy(), (camera->position.xy() + posOffset) - camera->position.xy()) < 0)
         posOffset *= recalculateSpeedMultiplier(camera->position.xy());
     camera->move(glm::vec3(posOffset, 0));
@@ -128,11 +125,18 @@ std::cerr << "ttttttttttttttttaaaaa";
     //TODO not sure why misbehaving in the pressedAny if
     if(inputs->pressedAfterRelease(Inputs::Z))
         *gpu->uniforms.switchView ^= 1;
+    if(inputs->pressedAfterRelease(Inputs::X))
+    {
+        gpu->requestScreenshot(&screenshotData);
+        *gpu->uniforms.screenshot = 1;
+    }
 }
-
 void Simulation::run()
 {
     *gpu->uniforms.focus = 0.0f;
+    auto windowSize = window->getFramebufferSize();
+    *gpu->uniforms.windowWidth = windowSize.width;
+    *gpu->uniforms.windowHeight = windowSize.height;
     while(!end)
     {
         auto startTime = std::chrono::high_resolution_clock::now();
@@ -141,6 +145,11 @@ void Simulation::run()
         gpu->updateFrameIndices(frames);
 
         gpu->render();
+        if(*gpu->uniforms.screenshot)
+        {
+            Resources::storeImage(&screenshotData, {windowSize.width, windowSize.height}, "./screenshot.ppm");
+            *gpu->uniforms.screenshot = 0;
+        }
         auto endTime = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> frameTime = endTime - startTime;
         //std::cerr << std::chrono::duration_cast<std::chrono::milliseconds>(frameTime).count() << std::endl;

@@ -31,4 +31,5 @@ private:
     glm::vec2 recalculateSpeedMultiplier(glm::vec2 position);
     glm::vec2 getMouseOffset();
     std::vector<Gpu::LfCurrentFrame> framesFromGrid(glm::uvec2 gridSize, glm::vec2 position);
+    std::vector<uint8_t> screenshotData;
 };
