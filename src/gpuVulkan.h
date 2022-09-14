@@ -225,6 +225,7 @@ private:
     //static constexpr size_t SHADER_STORAGE_COUNT = 1024 + 1; FOR RANGE SHADER
     static constexpr size_t SHADER_STORAGE_COUNT{(10000000*SHADER_STORAGE_MB)/sizeof(uint32_t)};
     static constexpr size_t SHADER_STORAGE_SIZE{sizeof(uint32_t) * SHADER_STORAGE_COUNT};
+    static constexpr size_t SHADER_STORAGE_DATA_OFFSET{sizeof(uint32_t)*1000};
     static constexpr int WARP_SIZE{32};
     static constexpr int LOCAL_SIZE_X{WARP_SIZE / 2};
     static constexpr int LOCAL_SIZE_Y{WARP_SIZE / 2};
@@ -244,7 +245,6 @@ private:
             *reinterpret_cast<int *>(&mapHalfPxSizeY),
             static_cast<int>(Gpu::focusMapSettings.iterations),
             static_cast<int>(Gpu::focusMapSettings.width), static_cast<int>(Gpu::focusMapSettings.height),
-            SHADER_STORAGE_COUNT
     };
     std::vector<vk::PipelineStageFlags> computeWaitStages{vk::PipelineStageFlagBits::eBottomOfPipe};
     std::vector<vk::PipelineStageFlags> graphicsWaitStages{vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader};
@@ -274,7 +274,7 @@ private:
     void createCommandPools();
     void createGraphicsCommandBuffers();
     void clearShaderStorage(PerFrameData &frameData, size_t computeSubmitID);
-    void getStorageBufferData(std::vector<uint8_t> *data, size_t size);
+    void getStorageBufferData(std::vector<uint8_t> *data, size_t size, size_t offset);
     void createComputeCommandBuffers();
     GpuVulkan::Buffer createBuffer(size_t size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties);
     void createBuffers();

@@ -11,7 +11,9 @@ layout(constant_id = 9) const float MAP_HALF_PX_SIZE_Y = 1 / 1080.0f;
 layout(constant_id = 10) const int SAMPLE_COUNT = 255;
 layout(constant_id = 11) const int MAP_WIDTH = 1920;
 layout(constant_id = 12) const int MAP_HEIGHT = 1080;
-layout(constant_id = 13) const int SHADER_STORAGE_SIZE = 1024;
+
+//must be same as in gpuVulkan for screenshots
+const int SHADER_STORAGE_RANGE_SIZE = 1000;
 
 vec2 LF_HALF_PX_SIZE = vec2(LF_HALF_PX_SIZE_X, LF_HALF_PX_SIZE_Y);
 vec2 MAP_HALF_PX_SIZE = vec2(MAP_HALF_PX_SIZE_X, MAP_HALF_PX_SIZE_Y);
@@ -22,12 +24,14 @@ layout(set = 0, binding = 0) uniform uniformBuffer
     float focus;
     int switchView;
     int screenshot;
-    uvec2 resolution;
+    int windowWidth;
+    int windowHeight;
 } uniforms;
 
 layout(std430, set = 0, binding = 4) buffer volatile shaderStorageBuffer
 {
-    int data[SHADER_STORAGE_SIZE];
+    int rangeData[SHADER_STORAGE_RANGE_SIZE];
+    int data[];
 } shaderStorage;
 
 layout(set = 0, binding = 1) uniform sampler textSampler;

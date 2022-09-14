@@ -24,8 +24,8 @@ void main()
 
     if(uniforms.screenshot == 1)
     {
-        uvec2 pixelCoords = uvec2(uv*uniforms.resolution);
-        uint index = pixelCoords.y*uniforms.resolution.x + pixelCoords.x;
+        uvec2 pixelCoords = uvec2(uv*ivec2(uniforms.windowWidth, uniforms.windowHeight));
+        uint index = pixelCoords.y*uniforms.windowWidth + pixelCoords.x;
         shaderStorage.data[index] = int(packUnorm4x8(outColor)); 
     } 
 }

@@ -52,8 +52,8 @@ void main()
         for(int i = 0; i < SUBGROUPS_NUM; i++)
             if(groupMins[i].x < totalMin.x)
                 totalMin = groupMins[i];
-        atomicAdd(shaderStorage.data[int(totalMin.y)], 1);
-        finished = atomicAdd(shaderStorage.data[SHADER_STORAGE_SIZE - 1], 1);
+        atomicAdd(shaderStorage.rangeData[int(totalMin.y)], 1);
+        finished = atomicAdd(shaderStorage.rangeData[SHADER_STORAGE_RANGE_SIZE - 1], 1);
         rangeEnd = 0;
     }
     memoryBarrierShared();
@@ -68,8 +68,8 @@ void main()
             int id = int(scanID) + i;
             if(id == 0 || id == SCAN_RESOLUTION - 1)
                 continue;
-            ivec3 data = ivec3(shaderStorage.data[id - 1], shaderStorage.data[id], shaderStorage.data[id + 1]);
-            if(all(greaterThan(data, ivec3(100))))
+            ivec3 rangeData = ivec3(shaderStorage.rangeData[id - 1], shaderStorage.rangeData[id], shaderStorage.rangeData[id + 1]);
+            if(all(greaterThan(rangeData, ivec3(100))))
                 atomicMax(rangeEnd, id);
         }
 
@@ -77,10 +77,10 @@ void main()
         barrier();
 
         if(scanID == 0)
-            shaderStorage.data[0] = floatBitsToInt(float(rangeEnd) / SCAN_RESOLUTION);
+            shaderStorage.rangeData[0] = floatBitsToInt(float(rangeEnd) / SCAN_RESOLUTION);
         //debugPrintfEXT("%d, %f", LF_WIDTH, LF_HALF_PX_SIZE.y);
         /*for(int i=0; i<GROUP_SIZE*ITERATIONS; i++)
-            debugPrintfEXT("%d,%d", i,shaderStorage.data[i]);*/
+            debugPrintfEXT("%d,%d", i,shaderStorage.rangeData[i]);*/
 
     }
 

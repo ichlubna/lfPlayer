@@ -131,6 +131,7 @@ void Simulation::processInputs()
         *gpu->uniforms.screenshot = 1;
     }
 }
+
 void Simulation::run()
 {
     *gpu->uniforms.focus = 0.0f;

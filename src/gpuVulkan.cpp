@@ -789,11 +789,11 @@ void GpuVulkan::requestScreenshot(std::vector<uint8_t> *data)
     frameData.shaderStorageCopy = data;
 }
 
-void GpuVulkan::getStorageBufferData(std::vector<uint8_t> *data, size_t size)
+void GpuVulkan::getStorageBufferData(std::vector<uint8_t> *data, size_t size, size_t offset)
 {
     auto &frameData = inFlightFrames.currentFrame();
     void *dataPtr;
-    if(device->mapMemory(*frameData.shaderStorageBuffer.memory, 0, size, vk::MemoryMapFlags(), &dataPtr) != vk::Result::eSuccess)
+    if(device->mapMemory(*frameData.shaderStorageBuffer.memory, offset, size, vk::MemoryMapFlags(), &dataPtr) != vk::Result::eSuccess)
         throw std::runtime_error("Cannot map memory for shader storage download.");
     data->resize(size);
     memcpy(data->data(), dataPtr, size);
@@ -1396,7 +1396,7 @@ void GpuVulkan::render()
     if(frameData.shaderStorageCopy)
     {
         device->waitIdle();
-        getStorageBufferData(frameData.shaderStorageCopy, extent.width*extent.height*sizeof(uint32_t));
+        getStorageBufferData(frameData.shaderStorageCopy, extent.width*extent.height*sizeof(uint32_t), SHADER_STORAGE_DATA_OFFSET);
         frameData.shaderStorageCopy = nullptr;
     }
     inFlightFrames.switchFrame();

@@ -91,8 +91,14 @@ void Resources::storeImage(std::vector<uint8_t> *data, glm::uvec2 resolution, st
 	fs << resolution.x << " " << resolution.y << std::endl;
 	fs << MAX_VAL << std::endl;
 
+    size_t pxId{0};
     for(size_t i=0; i<data->size(); i++)
-        if(i%4 != 0)
+    {
+        if(pxId != 3)
             fs << data->at(i);
+        pxId++;
+        if(pxId > 3)
+            pxId = 0;
+    }
 }
 
