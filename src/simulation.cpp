@@ -1,4 +1,5 @@
 #define GLM_FORCE_SWIZZLE
+#include <iomanip>
 #include <chrono>
 #include <thread>
 #include <filesystem>
@@ -9,6 +10,7 @@
 Simulation::Simulation(std::string filename, float focusMapScale, size_t focusMapIterations, GpuAPI gpuApi, WindowAPI windowApi) : camera {std::make_unique<Camera>()}
 {
     lightfield = resources.loadLightfield(filename);
+
     switch(windowApi)
     {
     case WINDOW_GLFW:
@@ -34,8 +36,6 @@ Simulation::Simulation(std::string filename, float focusMapScale, size_t focusMa
 
 std::vector<Gpu::LfCurrentFrame> Simulation::framesFromGrid(glm::uvec2 gridSize, glm::vec2 position)
 {
-    //UDELAT ZE JSOU FURT STEJNE INDEXY A NEMENI SE
-
     std::vector<Gpu::LfCurrentFrame> frames;
     glm::vec2 gridPosition{glm::vec2(gridSize - 1u) *position};
     glm::ivec2 downCoords{glm::floor(gridPosition)};
@@ -74,7 +74,6 @@ glm::vec2 Simulation::getMouseOffset()
     Inputs::mousePosition mp = inputs->getMousePosition();
     double relativeX = mp.x - previousX, relativeY = mp.y - previousY;
     previousX = mp.x, previousY = mp.y;
-    //camera->turn(relativeY*mouseSensitivity, relativeX*mouseSensitivity);
     return glm::vec2(relativeX, relativeY) * mouseSensitivity;
 }
 
@@ -122,12 +121,11 @@ void Simulation::processInputs()
     camera->move(glm::vec3(posOffset, 0));
     camera->clampPosition(glm::vec2(cameraBounds.x + EPS, cameraBounds.y - EPS));
 
-    //TODO not sure why misbehaving in the pressedAny if
     if(inputs->pressedAfterRelease(Inputs::Z))
         *gpu->uniforms.switchView ^= 1;
     if(inputs->pressedAfterRelease(Inputs::X))
     {
-        gpu->requestScreenshot(&screenshotData);
+        gpu->requestScreenshot(&screenshot.data);
         *gpu->uniforms.screenshot = 1;
     }
 }
@@ -148,7 +146,7 @@ void Simulation::run()
         gpu->render();
         if(*gpu->uniforms.screenshot)
         {
-            Resources::storeImage(&screenshotData, {windowSize.width, windowSize.height}, "./screenshot.ppm");
+            Resources::storeImage(&screenshot.data, {windowSize.width, windowSize.height}, screenshot.getNextName());
             *gpu->uniforms.screenshot = 0;
         }
         auto endTime = std::chrono::high_resolution_clock::now();
@@ -157,3 +155,10 @@ void Simulation::run()
     }
 }
 
+std::string Simulation::Screenshot::getNextName()
+{
+    std::stringstream ss;
+    ss << std::setw(4) << std::setfill('0') << number;
+    number++;
+    return path+ss.str()+extension;
+}
