@@ -6,12 +6,11 @@ void main()
 {
     if(any(greaterThan(outCoord, ivec2(MAP_WIDTH, MAP_HEIGHT))))
         return;
-    /*
-        float minVariance = 999.0f;
-        int minSample = 0;
+        float minVariance = 999999.0f;
+        float minSample = 0;
         for(int i=0; i<SAMPLE_COUNT; i++)
         {
-            float variance = getVariance(i);
+            float variance = getVariance(calculateFocus(i)*rangeLimit, mapUV);
             if(variance < minVariance)
             {
                 minVariance = variance;
@@ -19,7 +18,7 @@ void main()
             }
         }
         vec2 pixel = vec2(minSample/SAMPLE_COUNT, 0);
-    */
+/*
     const vec2 INIT_MIN = vec2(9999.0f, 0);
     vec2 mins[3] = {INIT_MIN, INIT_MIN, INIT_MIN};
     for(int i = 0; i < SAMPLE_COUNT; i++)
@@ -51,7 +50,7 @@ void main()
         //TODO doesnt work with 32, moc male? mozna vzdalenosti x
         if(delta.y > 0.1 * SAMPLE_COUNT)
             pixel.y = 1.0f;
-
+*/
     imageStore(images[FOCUSMAP_TEXTURE_ID], outCoord, vec4(pixel, 0, 0));
 
 }

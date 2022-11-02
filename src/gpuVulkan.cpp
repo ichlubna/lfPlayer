@@ -1270,7 +1270,7 @@ void GpuVulkan::loadFrameTextures()
 }
 
 void GpuVulkan::initVideoDecoder()
-{
+{/*
     for(auto &frameData : inFlightFrames.perFrameData)
     {
         VkVideoProfileKHR profile;
@@ -1284,14 +1284,14 @@ void GpuVulkan::initVideoDecoder()
         createInfo.pVideoProfile = &profile;
         createInfo.queueFamilyIndex = queueFamilyIDs.video;
         createInfo.pictureFormat = VkFormat::VK_FORMAT_R8G8B8_UINT;//vk::Format::eR8G8B8Uint;
-        createInfo.maxCodedExtent = /*vk::Extent2D*/VkExtent2D{Gpu::lightfield->resolution.x, Gpu::lightfield->resolution.y};
+        createInfo.maxCodedExtent = VkExtent2D{Gpu::lightfield->resolution.x, Gpu::lightfield->resolution.y};
         createInfo.maxReferencePicturesSlotsCount = 5;
         createInfo.maxReferencePicturesActiveCount = 5;
         createInfo.referencePicturesFormat = VkFormat::VK_FORMAT_R8G8B8_UINT;//vk::Format::eR8G8B8Uint;
 
         vk::DispatchLoaderDynamic instanceLoader(*instance, vkGetInstanceProcAddr);
         instanceLoader.vkCreateVideoSessionKHR(*device, &createInfo, nullptr, &frameData.decoder.videoSession);
-    }
+    }*/
 }
 
 void GpuVulkan::updateDescriptors()

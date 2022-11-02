@@ -85,6 +85,7 @@ glm::vec2 Simulation::recalculateSpeedMultiplier(glm::vec2 position)
 
 void Simulation::processInputs()
 {
+    constexpr float FOCUS_SENSITIVITY{0.01};
     inputs = window->getInputs();
 
     glm::vec2 posOffset = glm::vec2(0);
@@ -103,9 +104,9 @@ void Simulation::processInputs()
             posOffset.x -= cameraSpeed;
 
         if(inputs->pressed(Inputs::LMB))
-            *gpu->uniforms.focus -= 0.1f;
+            *gpu->uniforms.focus -= FOCUS_SENSITIVITY;
         if(inputs->pressed(Inputs::RMB))
-            *gpu->uniforms.focus += 0.1f;
+            *gpu->uniforms.focus += FOCUS_SENSITIVITY;
 
         if(inputs->pressed(Inputs::Key::ESC))
             end = true;
@@ -129,7 +130,6 @@ void Simulation::processInputs()
         *gpu->uniforms.screenshot = 1;
     }
 }
-
 void Simulation::run()
 {
     *gpu->uniforms.focus = 0.0f;

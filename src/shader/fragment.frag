@@ -14,7 +14,7 @@ void main()
     if(uniforms.switchView == 0)
     {
         for(int j = 0; j < 4; j++)
-            outColor += lfFrameWeight(j) * texture(sampler2D(textures[2 + j], textSampler), lfFrameOffset(j) * calculateFocus(minSample) * rangeLimit * vec2(ASPECT_RATIO, 1.0f) + uv);
+            outColor += lfFrameWeight(j) * texture(sampler2D(textures[2 + j], textSampler), lfFrameOffset(j) * calculateFocus(minSample) * rangeLimit + uv);
     }
     else
     {

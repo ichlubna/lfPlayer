@@ -1,7 +1,6 @@
 //discards the 4th attribute
 float colorDistance(vec4 a, vec4 b)
 {
-    //return max(max(max(abs(a.r-b.r), abs(a.g-b.g)), abs(a.b-b.b)), abs(a.a-b.a)); //Chebyshev
     return max(max(abs(a.r - b.r), abs(a.g - b.g)), abs(a.b - b.b)); //Chebyshev
 }
 
@@ -29,7 +28,7 @@ void addWelford(mat4 block)
     mat4 delta = block - welford.mean;
     float dist = blockDistance(block, welford.mean);
     welford.mean += delta / welford.n;
-    welford.m2 = dist * blockDistance(block, welford.mean);
+    welford.m2 += dist * blockDistance(block, welford.mean);
 }
 float finishWelford()
 {
@@ -45,7 +44,7 @@ float getVariance(float normDisplacement, vec2 coords)
     for(int i = 0; i < 4; i++)
     {
         vec2 offset = vec2(lfFrameOffset(i) * normDisplacement);
-        offset.x *= ASPECT_RATIO;
+        //offset.x *= ASPECT_RATIO;
         vec2 coord = coords + offset;
         addWelford(sampleImage(coord, i));
     }
